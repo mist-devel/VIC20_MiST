@@ -112,6 +112,7 @@ wire  [7:0] joystick_1;
 wire  [1:0] buttons;
 wire  [1:0] switches;
 wire        scandoubler_disable;
+wire        ypbpr;
 wire [31:0] status;
 
 wire [31:0] sd_lba;
@@ -138,6 +139,7 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 
     .status(status),
     .scandoubler_disable(scandoubler_disable),
+    .ypbpr(ypbpr),
     .buttons(buttons),
     .switches(switches),
     .joystick_0(joystick_0),
@@ -376,8 +378,8 @@ wire        csync_out = (hsync_out == vsync_out);
 
 // a minimig vga->scart cable expects a composite sync signal on the VGA_HS output.
 // and VCC on VGA_VS (to switch into rgb mode)
-assign      VGA_HS = scandoubler_disable ? csync_out : hsync_out;
-assign      VGA_VS = scandoubler_disable ? 1'b1 : vsync_out;
+assign      VGA_HS = (scandoubler_disable || ypbpr)? csync_out : hsync_out;
+assign      VGA_VS = (scandoubler_disable || ypbpr)? 1'b1 : vsync_out;
 
 scandoubler scandoubler
 (
@@ -395,6 +397,8 @@ scandoubler scandoubler
     .b_out(SD_B_O)
 );
 
+wire [5:0] osd_r_o, osd_g_o, osd_b_o;
+
 osd osd
 (
     .clk_sys(clk_sys),
@@ -407,13 +411,29 @@ osd osd
     .blue_in(scandoubler_disable ? {VGA_B_O, 2'b00} : SD_B_O),
     .hs_in(scandoubler_disable ? VGA_HS_O : SD_HS_O),
     .vs_in(scandoubler_disable ? VGA_VS_O : SD_VS_O),
-    .red_out(VGA_R),
-    .green_out(VGA_G),
-    .blue_out(VGA_B),
+    .red_out(osd_r_o),
+    .green_out(osd_g_o),
+    .blue_out(osd_b_o),
     .hs_out(hsync_out),
     .vs_out(vsync_out)
     );
 
+wire [5:0] y, pb, pr;
+	 
+rgb2ypbpr rgb2ypbpr 
+(
+	.red   ( osd_r_o ),
+	.green ( osd_g_o ),
+	.blue  ( osd_b_o ),
+	.y     ( y       ),
+	.pb    ( pb      ),
+	.pr    ( pr      )
+);
+	 
+assign VGA_R = ypbpr?pr:osd_r_o;
+assign VGA_G = ypbpr? y:osd_g_o;
+assign VGA_B = ypbpr?pb:osd_b_o;
+	 
 //////////////////   DISK   //////////////////
 
 wire led_disk;
