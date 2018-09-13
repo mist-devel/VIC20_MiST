@@ -514,10 +514,10 @@ begin
       );
 
   cass_write <= keybd_col_out(3);
-  keybd_col_in(6 downto 0) <= keybd_col_out(6 downto 0);
-  keybd_col_in(7) <= keybd_col_out(7) and joy(3);
 
-  O_MATRIX_IN <= not( keybd_col_in );
+  keybd_col_in(7) <= joy(3);
+
+  O_MATRIX_IN <= not( keybd_col_out );
   keybd_row_in <= not( I_MATRIX_OUT );
   keybd_restore <= not( I_RESTORE_OUT );
 
