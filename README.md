@@ -23,7 +23,14 @@ option for cartrdiges!
 The core supports from the orginal unexpanded (5k RAM) machine to a fully extended one
 (total of 40k RAM). Unfortunately not all games supports all expansion modes, 
 so you have to figure out what a particular game requires.
+#### RAM map:
+ - 3k Extension: $0400
+ - 8k+ Extensions: $2000, $4000, $6000
+ - 8k ROM/RAM: $a000
 
 ### ROM update:
 The built-in ROMs can be overridden via placing a vic20.rom file to the root of the SD Card.
-The file format is: 1541 (16k) + Kernal (8k) + Basic (8k) + Char (4k)
+The file format is: 1541 (16k) + Kernal (8k) + Basic (8k) + Char (4k).
+
+### Download pre-built binaries:
+Go to [releases](https://github.com/gyurco/VIC20_MiST/releases).
