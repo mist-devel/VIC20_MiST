@@ -63,16 +63,17 @@ assign LED = ~ioctl_download & ~led_disk;
 `include "build_id.v"
 localparam CONF_STR = 
 {
-	"VIC20;PRG;",
-	"F1,CRT;",
-	"S,D64,Mount Disk;",
-	"O2,CRT with load address,No,Yes;",
-	"OAB,Scanlines,Off,25%,50%,75%;",
-	"O45,Enable 8K+ Expansion,Off,8K,16K,24K;",
-	"O6,Enable 3K Expansion,Off,On;",
+    "VIC20;PRG;",
+    "F1,CRT,Load;",
+    "S,D64,Mount Disk;",
+    "O2,CRT with load address,Yes,No;",
+    "OAB,Scanlines,Off,25%,50%,75%;",
+    "O45,Enable 8K+ Expansion,Off,8K,16K,24K;",
+    "O6,Enable 3K Expansion,Off,On;",
     "O78,Enable 8k ROM,Off,RO,RW;",
-	"T0,Reset;",
-	"V,v1.0.",`BUILD_DATE
+    "T0,Reset;",
+    "T1,Reset with cart unload;",
+    "V,v1.0.",`BUILD_DATE
 };
 
 
@@ -84,6 +85,8 @@ wire pll_locked;
 reg clk_ref; //sync sdram to during prg downloading
 reg  reset;
 reg  c1541_reset;
+reg cart_unload;
+reg force_reset;
 
 pll27 pll
 (
@@ -99,7 +102,9 @@ always @(posedge clk_sys) begin
     clk_ref <= !sys_count;
     sys_count <= sys_count + 1'd1;
     
-    reset <= status[0] | buttons[1] | ~pll_locked;
+    reset <= status[0] | status[1] | buttons[1] | force_reset | ~pll_locked;
+    cart_unload <= 0;
+    if (status[1] | buttons[1]) cart_unload <= 1;
     c1541_reset <= reset;
 end
 
@@ -249,8 +254,8 @@ sdram ram
     .bank(2'b00),
     .dout(sdram_out),
     .din (prg_download ? ioctl_dout : sdram_in),
-    .addr(prg_download ? ioctl_target_addr : {9'b0, sdram_a[15:0]}),
-    .we((sdram_en & ~sdram_wr_n) || (prg_download && !ioctl_internal_memory_wr && ioctl_ram_wr)),
+    .addr(prg_download ? ioctl_target_addr : {9'b0, cart_unload ? 16'ha004 : sdram_a[15:0]}),
+    .we((sdram_en & ~sdram_wr_n) || (prg_download && !ioctl_internal_memory_wr && ioctl_ram_wr) || cart_unload),
     .oe(sdram_en & sdram_wr_n)
 );
 
@@ -262,7 +267,7 @@ wire  [7:0] ioctl_dout;
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
 wire        rom_download = ioctl_download && !ioctl_index;
-wire        prg_download = ioctl_download && ioctl_index[4:0] == 5'd1;
+wire        prg_download = ioctl_download && ioctl_index;
 reg   [4:0] ioctl_reg_inject_state = 0;
 wire [15:0] ioctl_target_addr;
 reg  [15:0] ioctl_prg_addr;
@@ -305,15 +310,23 @@ wire ioctl_internal_memory_wr =
 
 always @(negedge clk_sys) begin
     reg old_prg_download;
+    reg auto_reset;
     
+    force_reset <= 0;
     old_prg_download <= prg_download;
     ioctl_ram_wr <= 0;
     if (prg_download && ioctl_wr) begin
-        if (ioctl_addr == 16'h0000) ioctl_prg_addr[7:0] <= ioctl_dout; else
-        if (ioctl_addr == 16'h0001) ioctl_prg_addr[15:8] <= ioctl_dout; else begin
+        if (ioctl_index[4:0] == 5'h1 | ~status[2]) begin //cart/prg loading with address in the first 2 bytes
+            if (ioctl_addr == 16'h0000) ioctl_prg_addr[7:0] <= ioctl_dout; else
+            if (ioctl_addr == 16'h0001) ioctl_prg_addr[15:8] <= ioctl_dout; else begin
+                ioctl_ram_wr <= 1;
+                if (ioctl_addr != 16'h0002) ioctl_prg_addr <= ioctl_prg_addr + 1'd1;
+            end
+        end else begin
+            ioctl_prg_addr <= ioctl_addr ? ioctl_prg_addr + 1'd1 : 16'ha000; //load to $a000
             ioctl_ram_wr <= 1;
-            if (ioctl_addr != 16'h0002) ioctl_prg_addr <= ioctl_prg_addr + 1'd1;
         end
+        if (ioctl_prg_addr == 16'ha000) auto_reset <= 1;
     end
     if (rom_download) ioctl_ram_wr <= ioctl_wr;
     
@@ -329,6 +342,7 @@ always @(negedge clk_sys) begin
 		11: begin ioctl_reg_addr <= 16'h32; ioctl_reg_data <= ioctl_prg_addr[15:8]; ioctl_ram_wr <= 1; end
 		13: begin ioctl_reg_addr <= 16'hae; ioctl_reg_data <= ioctl_prg_addr[7:0];  ioctl_ram_wr <= 1; end
 		15: begin ioctl_reg_addr <= 16'haf; ioctl_reg_data <= ioctl_prg_addr[15:8]; ioctl_ram_wr <= 1; end
+        31: begin force_reset <= auto_reset; auto_reset <= 0; end
     endcase
 
     if (ioctl_reg_inject_state) ioctl_reg_inject_state <= ioctl_reg_inject_state + 1'd1;

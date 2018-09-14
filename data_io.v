@@ -28,7 +28,7 @@ module data_io (
 
 	output            downloading,   // signal indicating an active download
 	output [24:0]     size,          // number of bytes in input buffer
-	output reg [4:0]  index,         // menu index used to upload the file
+	output reg [7:0]  index,         // menu index used to upload the file
 	 
 	// external ram interface
 	input 			  clk,
