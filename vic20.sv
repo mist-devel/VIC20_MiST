@@ -173,8 +173,10 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
     .sd_ack_conf()
 );
 
-wire  [7:0] matrix_in;
-wire  [7:0] matrix_out;
+wire  [7:0] col_in;
+wire  [7:0] row_out;
+wire  [7:0] row_in;
+wire  [7:0] col_out;
 wire        restore_key;
 
 keyboard keyboard
@@ -183,8 +185,10 @@ keyboard keyboard
     .clk_sys(clk_sys),
     .ps2_kbd_clk(ps2Clk),
     .ps2_kbd_data(ps2Data),
-    .matrix_in(matrix_in),
-    .matrix_out(matrix_out),
+    .col_in(col_in),
+    .row_out(row_out),
+    .row_in(row_in),
+    .col_out(col_out),
     .restore_key(restore_key)
 );
 
@@ -211,8 +215,10 @@ vic20 VIC20
 	.clk_i(c1541_iec_clk_o),
     .data_i(c1541_iec_data_o),
 
-    .O_MATRIX_IN(matrix_in),
-    .I_MATRIX_OUT(matrix_out),
+    .O_ROW_IN(row_in),
+    .I_COL_OUT(col_out),
+    .O_COL_IN(col_in),
+    .I_ROW_OUT(row_out),
     .I_RESTORE_OUT(restore_key),
 
     .I_CART_EN(|status[8:7]),  // at $A000(8k)

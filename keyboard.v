@@ -45,8 +45,10 @@ module keyboard
 	input             ps2_kbd_clk,
 	input             ps2_kbd_data,
 
-	input       [7:0] matrix_in,
-	output      [7:0] matrix_out,
+	input       [7:0] col_in,
+	output      [7:0] row_out,
+    input       [7:0] row_in,
+    output      [7:0] col_out,
     output reg        restore_key,
 
 	output reg [11:1] Fn = 0,
@@ -60,14 +62,23 @@ wire [7:0] kcode = kdata[9:2];
 reg  [7:0] keys[7:0];
 reg        release_btn = 0;
 
-assign matrix_out = ({8{matrix_in[0]}} & ~keys[0]) | 
-                    ({8{matrix_in[1]}} & ~keys[1]) |
-                    ({8{matrix_in[2]}} & ~keys[2]) |
-                    ({8{matrix_in[3]}} & ~keys[3]) |
-                    ({8{matrix_in[4]}} & ~keys[4]) |
-                    ({8{matrix_in[5]}} & ~keys[5]) |
-                    ({8{matrix_in[6]}} & ~keys[6]) |
-                    ({8{matrix_in[7]}} & ~keys[7]);
+assign row_out = ({8{col_in[0]}} & ~keys[0]) | 
+                 ({8{col_in[1]}} & ~keys[1]) |
+                 ({8{col_in[2]}} & ~keys[2]) |
+                 ({8{col_in[3]}} & ~keys[3]) |
+                 ({8{col_in[4]}} & ~keys[4]) |
+                 ({8{col_in[5]}} & ~keys[5]) |
+                 ({8{col_in[6]}} & ~keys[6]) |
+                 ({8{col_in[7]}} & ~keys[7]);
+
+assign col_out = ({8{row_in[0]}} & {~keys[7][0], ~keys[6][0], ~keys[5][0], ~keys[4][0], ~keys[3][0], ~keys[2][0], ~keys[1][0], ~keys[0][0]}) | 
+                 ({8{row_in[1]}} & {~keys[7][1], ~keys[6][1], ~keys[5][1], ~keys[4][1], ~keys[3][1], ~keys[2][1], ~keys[1][1], ~keys[0][1]}) |
+                 ({8{row_in[2]}} & {~keys[7][2], ~keys[6][2], ~keys[5][2], ~keys[4][2], ~keys[3][2], ~keys[2][2], ~keys[1][2], ~keys[0][2]}) |
+                 ({8{row_in[3]}} & {~keys[7][3], ~keys[6][3], ~keys[5][3], ~keys[4][3], ~keys[3][3], ~keys[2][3], ~keys[1][3], ~keys[0][3]}) |
+                 ({8{row_in[4]}} & {~keys[7][4], ~keys[6][4], ~keys[5][4], ~keys[4][4], ~keys[3][4], ~keys[2][4], ~keys[1][4], ~keys[0][4]}) |
+                 ({8{row_in[5]}} & {~keys[7][5], ~keys[6][5], ~keys[5][5], ~keys[4][5], ~keys[3][5], ~keys[2][5], ~keys[1][5], ~keys[0][5]}) |
+                 ({8{row_in[6]}} & {~keys[7][6], ~keys[6][6], ~keys[5][6], ~keys[4][6], ~keys[3][6], ~keys[2][6], ~keys[1][6], ~keys[0][6]}) |
+                 ({8{row_in[7]}} & {~keys[7][7], ~keys[6][7], ~keys[5][7], ~keys[4][7], ~keys[3][7], ~keys[2][7], ~keys[1][7], ~keys[0][7]});
 
 wire shift = mod[0];
 always @(posedge clk_sys) begin
@@ -193,11 +204,11 @@ always @(posedge clk_sys) begin
                         
                         8'h6b: begin //Cursor Left
                                 keys[2][7] <= release_btn;
-                                keys[3][1] <= release_btn;
+                                keys[4][6] <= release_btn;
                               end
                         8'h75: begin //Cursor Up
                                 keys[3][7] <= release_btn;
-                                keys[3][1] <= release_btn;
+                                keys[4][6] <= release_btn;
                               end
 					endcase
 

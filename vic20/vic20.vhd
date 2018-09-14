@@ -82,8 +82,10 @@ entity VIC20 is
     o_vsync               : out   std_logic;
     o_de                  : out   std_logic;
     --
-    o_matrix_in           : out   std_logic_vector(7 downto 0); -- take care, positive logic (1=>selected)
-    i_matrix_out          : in    std_logic_vector(7 downto 0); -- take care, positive logic (1=>pressed)
+    o_row_in              : out   std_logic_vector(7 downto 0); -- take care, positive logic (1=>selected)
+    i_col_out             : in    std_logic_vector(7 downto 0); -- take care, positive logic (1=>pressed)
+    o_col_in              : out   std_logic_vector(7 downto 0); -- take care, positive logic (1=>selected)
+    i_row_out             : in    std_logic_vector(7 downto 0); -- take care, positive logic (1=>pressed)
     i_restore_out         : in    std_logic;                    -- take care, positive logic (1=>pressed)
 	 --
     o_audio               : out   std_logic_vector(15 downto 0); -- runs at SYSCLK/SYSCLK_EN rate
@@ -197,13 +199,12 @@ architecture RTL of VIC20 is
 
     signal keybd_col_out      : std_logic_vector(7 downto 0);
     signal keybd_col_out_s    : std_logic_vector(7 downto 0);
-    signal keybd_col_out_oe_l : std_logic_vector(7 downto 0);
     signal keybd_col_in       : std_logic_vector(7 downto 0);
     signal keybd_col_oe_l     : std_logic_vector(7 downto 0);
     signal keybd_row_in       : std_logic_vector(7 downto 0);
     signal keybd_row_out      : std_logic_vector(7 downto 0);
     signal keybd_row_out_s    : std_logic_vector(7 downto 0);
-    signal keybd_row_out_oe_l : std_logic_vector(7 downto 0);
+    signal keybd_row_oe_l     : std_logic_vector(7 downto 0);
     signal keybd_restore      : std_logic;
 
     signal joy                : std_logic_vector(3 downto 0);
@@ -496,8 +497,8 @@ begin
       O_CA2_OE_L      => open,
 
       I_PA            => keybd_row_in,
-      O_PA            => open,
-      O_PA_OE_L       => open,
+      O_PA            => keybd_row_out,
+      O_PA_OE_L       => keybd_row_oe_l,
 
       -- port b
       I_CB1           => serial_srq_in,
@@ -514,11 +515,15 @@ begin
       );
 
   cass_write <= keybd_col_out(3);
+  keybd_row_out_s <= keybd_row_out or keybd_row_oe_l;
+  keybd_col_out_s <= keybd_col_out or keybd_col_oe_l;
 
-  keybd_col_in(7) <= joy(3);
+  O_ROW_IN <= not ( keybd_row_out_s );
+  keybd_col_in(6 downto 0) <= not( I_COL_OUT(6 downto 0) );
+  keybd_col_in(7) <= not( I_COL_OUT(7) ) and joy(3);
 
-  O_MATRIX_IN <= not( keybd_col_out );
-  keybd_row_in <= not( I_MATRIX_OUT );
+  O_COL_IN <= not( keybd_col_out_s );
+  keybd_row_in <= not( I_ROW_OUT );
   keybd_restore <= not( I_RESTORE_OUT );
 
   p_irq_resolve : process(expansion_irq_l, expansion_nmi_l,
