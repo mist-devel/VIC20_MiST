@@ -436,7 +436,7 @@ begin
           last_matrix_cnt(13 downto 9) <= r_screen_mem;
           last_matrix_cnt( 8 downto 0) <= (others => '0'); -- top left;
         elsif (h_char_last = '1') and v_char_last then
-          last_matrix_cnt <= matrix_cnt;
+          last_matrix_cnt <= last_matrix_cnt + r_num_cols;
         end if;
         if (hsync = '1') then
           matrix_cnt <= last_matrix_cnt;
@@ -508,7 +508,7 @@ begin
         else
           v_end := (v_char_cnt(9 downto 0) = (r_num_rows(5 downto 0) & "0000"));
         end if;
-        if v_end or (vblank = '1') then
+        if v_end or (vcnt = TOTAL_LINES_M1) then
           v_char_cnt <= (others => '0');
         else
           if start_h then
