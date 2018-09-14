@@ -79,6 +79,7 @@ localparam CONF_STR =
 
 ////////////////////   CLOCKS   ///////////////////
 wire clk_sys;
+wire clk_1541;
 reg clk8m;
 reg clk16m;
 wire pll_locked;
@@ -91,7 +92,8 @@ reg force_reset;
 pll27 pll
 (
     .inclk0(CLOCK_27[0]),
-    .c0(clk_sys),
+    .c0(clk_sys),  //35.48 MHz
+    .c1(clk_1541), //32 MHz
     .locked(pll_locked)
 );
 
@@ -133,7 +135,7 @@ wire        img_mounted;
 user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 (
     .clk_sys(clk_sys),
-    .clk_sd(clk_sys),
+    .clk_sd(clk_1541),
     .SPI_SS_IO(CONF_DATA0),
     .SPI_CLK(SPI_SCK),
     .SPI_MOSI(SPI_DI),
@@ -466,7 +468,7 @@ wire c1541_iec_data_o;
 wire c1541_iec_clk_o;
 
 c1541_sd c1541_sd (
-    .clk32 ( clk_sys ),
+    .clk32 ( clk_1541 ),
     .reset ( c1541_reset ),
 
     .disk_change ( img_mounted ),

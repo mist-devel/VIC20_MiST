@@ -34,6 +34,7 @@ derive_clock_uncertainty
 
 # Clock groups
 set_clock_groups -asynchronous -group [get_clocks {SPI_SCK}] -group [get_clocks pll|altpll_component|auto_generated|pll1|clk[*]]
+set_clock_groups -asynchronous -group [get_clocks pll|altpll_component|auto_generated|pll1|clk[0]] -group [get_clocks pll|altpll_component|auto_generated|pll1|clk[1]]
 
 # Some relaxed constrain to the VGA pins. The signals should arrive together, the delay is not really important.
 set_output_delay -clock [get_clocks pll|altpll_component|auto_generated|pll1|clk[0]] -max 0 [get_ports {VGA_*}]
