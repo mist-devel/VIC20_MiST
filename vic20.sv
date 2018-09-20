@@ -58,12 +58,17 @@ module vic20_mist
    output        SDRAM_CKE
 );
 
+parameter MODE_PAL = 1'b1;
+parameter CORE_NAME = "VIC20PAL";
+//parameter CORE_NAME = "VIC20NTSC";
+
 assign LED = ~ioctl_download & ~led_disk;
 
 `include "build_id.v"
-localparam CONF_STR = 
+
+localparam CONF_STR =
 {
-    "VIC20;PRG;",
+    CORE_NAME,";PRG;",
     "F1,CRT,Load;",
     "S,D64,Mount Disk;",
     "O2,CRT with load address,Yes,No;",
@@ -78,7 +83,9 @@ localparam CONF_STR =
 
 
 ////////////////////   CLOCKS   ///////////////////
-wire clk_sys;
+wire clk_pal;
+wire clk_ntsc;
+wire clk_sys = MODE_PAL ? clk_pal : clk_ntsc;
 wire clk_1541;
 reg clk8m;
 reg clk16m;
@@ -92,8 +99,9 @@ reg force_reset;
 pll27 pll
 (
     .inclk0(CLOCK_27[0]),
-    .c0(clk_sys),  //35.48 MHz
-    .c1(clk_1541), //32 MHz
+    .c0(clk_pal),  //35.48 MHz
+    .c1(clk_ntsc), //28.63 MHz
+    .c2(clk_1541), //32 MHz
     .locked(pll_locked)
 );
 
@@ -196,7 +204,7 @@ keyboard keyboard
 
 wire  [7:0] vic20_joy = joystick_0 | joystick_1;
 
-vic20 VIC20
+vic20 #(.MODE_PAL(MODE_PAL)) VIC20
 (
     .I_SYSCLK(clk_sys),
     .I_SYSCLK_EN(clk8m & ~ioctl_download),

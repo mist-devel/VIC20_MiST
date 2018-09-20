@@ -1,5 +1,5 @@
 --
--- A model of the 6561 PAL VIC chip
+-- A model of the 6560/6561 NTSC/PAL VIC chip
 --
 -- Fully functional and tested against a real chip.
 --
@@ -67,6 +67,7 @@ library ieee ;
 
 entity M6561 is
   generic (
+    MODE_PAL          : in    std_logic := '1';
     K_OFFSET          : in    std_logic_vector(4 downto 0) := "10000"
     );
   port (
@@ -105,12 +106,21 @@ end entity M6561;
 
 architecture RTL of M6561 is
 
+  function sel(pal,ntsc: std_logic_vector) return std_logic_vector is
+  begin
+    if (MODE_PAL = '1') then
+      return pal;
+    else
+      return ntsc;
+    end if;
+  end function;
+
   -- clocks per line must be divisable by 4
-  constant CLOCKS_PER_LINE_M1 : std_logic_vector(8 downto 0) := "100011011"; -- 284 -1
-  constant TOTAL_LINES_M1     : std_logic_vector(8 downto 0) := "100110111"; -- 312 -1
-  constant H_START_M1         : std_logic_vector(8 downto 0) := "000101011"; -- 44 -1
-  constant H_END_M1           : std_logic_vector(8 downto 0) := "100001111"; -- 272 -1
-  constant V_START            : std_logic_vector(8 downto 0) := "000011100"; -- 28
+  constant CLOCKS_PER_LINE_M1 : std_logic_vector(8 downto 0) := sel("100011011", "100000011"); -- 284/260 -1
+  constant TOTAL_LINES_M1     : std_logic_vector(8 downto 0) := sel("100110111", "100000100"); -- 312/260 -1
+  constant H_START_M1         : std_logic_vector(8 downto 0) := sel("000101011", "000011111"); -- 44/32 -1
+  constant H_END_M1           : std_logic_vector(8 downto 0) := sel("100001111", "011110011"); -- 272/244 -1
+  constant V_START            : std_logic_vector(8 downto 0) := sel("000011100", "000010000"); -- 28
   -- video size 228 pixels by 284 lines
 
   -- close to original                               RGB

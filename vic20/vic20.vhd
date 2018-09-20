@@ -55,10 +55,14 @@ library ieee ;
 --  use UNISIM.Vcomponents.all;
 
 entity VIC20 is
+  generic (
+    MODE_PAL              : in    std_logic := '1'
+    );
   port (
     --
     i_sysclk              : in    std_logic;  -- comes from CLK_A via DCM (divided by 4)
-    i_sysclk_en           : in    std_logic;  -- 8.867236 MHz enable signal
+    i_sysclk_en           : in    std_logic;  -- 8.867236 MHz (PAL),
+                                              -- 7.15909 (NTSC) enable signal
     i_reset               : in    std_logic;
     -- serial bus pins
     atn_o                 : out std_logic; -- open drain
@@ -108,8 +112,8 @@ entity VIC20 is
     );
 end;
 
--- PAL version runs with a 8,867,236 Hz Quartz which is divided by two
---
+-- PAL version runs with a 8,867,236 Hz Quartz which is divided by two for display, eight for CPU
+-- NTSC version runs with a 14,318,18 Hz Quartz which is divided by 3.5 for display, fourteen for CPU
 
 architecture RTL of VIC20 is
   -- selects CPU related debugging signals for external debug
@@ -245,6 +249,16 @@ architecture RTL of VIC20 is
     signal basic_wr           : std_logic;
     signal char_wr            : std_logic;
 
+    function kernal_rom_file_f return string is
+	 begin
+	   if (MODE_PAL = '1') then
+        return("../roms/KERNAL_PAL.HEX");
+      else
+        return("../roms/KERNAL_NTSC.HEX");
+      end if;
+    end function;
+    constant kernal_rom_file  : string := kernal_rom_file_f;
+
 begin
   o_p2_h <= p2_h;
 
@@ -295,6 +309,9 @@ begin
   reset_l <= not i_reset;
   --
   u_clocks : entity work.VIC20_CLOCKS
+    generic map (
+      MODE_PAL        => MODE_PAL
+    )
     port map (
       I_SYSCLK          => i_sysclk,
       I_SYSCLK_EN       => i_sysclk_en,
@@ -334,6 +351,7 @@ begin
 
   vic : entity work.M6561
     generic map (
+      MODE_PAL        => MODE_PAL,
       K_OFFSET        => K_OFFSET
       )
     port map (
@@ -853,11 +871,12 @@ begin
       );
 
   kernal_wr <= '1' when conf_ai(15 downto 13) = "111" else '0';
+
   kernal_rom : entity work.gen_rom
     generic map (
       ADDR_WIDTH => 13,
       --START_AI => "1110000000000000",   -- 0xE000
-      INIT_FILE => "../roms/KERNAL.HEX"
+      INIT_FILE => kernal_rom_file
     )
     port map (
       rdclock   => i_sysclk,
