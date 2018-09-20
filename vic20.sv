@@ -59,8 +59,6 @@ module vic20_mist
 );
 
 parameter MODE_PAL = 1'b1;
-parameter CORE_NAME = "VIC20PAL";
-//parameter CORE_NAME = "VIC20NTSC";
 
 assign LED = ~ioctl_download & ~led_disk;
 
@@ -68,7 +66,7 @@ assign LED = ~ioctl_download & ~led_disk;
 
 localparam CONF_STR =
 {
-    CORE_NAME,";PRG;",
+    "VIC20;PRG;",
     "F1,CRT,Load;",
     "S,D64,Mount Disk;",
     "O2,CRT with load address,Yes,No;",
@@ -309,9 +307,10 @@ data_io data_io (
 always_comb begin
     casex ({rom_download, ioctl_addr[15:13]})
         'b1_00X: ioctl_target_addr = {2'b00, ioctl_addr[13:0]}; //1541
-        'b1_010: ioctl_target_addr = {3'b111, ioctl_addr[12:0]}; //kernal
-        'b1_011: ioctl_target_addr = {3'b110, ioctl_addr[12:0]}; //basic
-        'b1_100: ioctl_target_addr = {4'b1000, ioctl_addr[11:0]}; //character
+        'b1_010: ioctl_target_addr = {MODE_PAL ? 3'b111 : 3'b011, ioctl_addr[12:0]}; //kernal - PAL
+        'b1_011: ioctl_target_addr = {MODE_PAL ? 3'b011 : 3'b111, ioctl_addr[12:0]}; //kernal - NTSC
+        'b1_100: ioctl_target_addr = {3'b110, ioctl_addr[12:0]}; //basic
+        'b1_101: ioctl_target_addr = {4'b1000, ioctl_addr[11:0]}; //character
         'b0_XXX: ioctl_target_addr = ioctl_reg_inject_state ? ioctl_reg_addr : ioctl_prg_addr;
         default: ioctl_target_addr = 0;
     endcase;
