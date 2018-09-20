@@ -51,6 +51,9 @@ library ieee;
   use ieee.numeric_std.all;
 
 entity VIC20_CLOCKS is
+  generic (
+    MODE_PAL              : in    std_logic := '1'
+    );
   port (
     I_SYSCLK          : in    std_logic;
     I_SYSCLK_EN       : in    std_logic;
@@ -64,7 +67,7 @@ end;
 architecture RTL of VIC20_CLOCKS is
 
   signal delay_count            : unsigned(11 downto 0) := (others => '0');
-  signal div_cnt                : unsigned(1 downto 0);
+  signal div_cnt                : unsigned(2 downto 0);
 
 begin
   p_delay : process(I_RESET_L, I_SYSCLK)
@@ -90,11 +93,13 @@ begin
       div_cnt <= (others => '0');
     elsif rising_edge(I_SYSCLK) then
       if (I_SYSCLK_EN='1') then
-        div_cnt <= div_cnt + "1";
-        O_ENA    <= div_cnt(0) and I_SYSCLK_EN;
-      else
-        O_ENA    <= '0';
+        if (MODE_PAL = '0' and div_cnt = "111") then
+            div_cnt <= "001"; -- 4 enable/7 ticks in NTSC mode
+        else
+            div_cnt <= div_cnt + "1";
+        end if;
       end if;
+      O_ENA    <= div_cnt(0) and I_SYSCLK_EN;
     end if;
   end process;
 end RTL;
