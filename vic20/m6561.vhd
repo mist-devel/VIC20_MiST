@@ -1,5 +1,5 @@
 --
--- A model of the 6561 PAL VIC chip
+-- A model of the 6560/6561 NTSC/PAL VIC chip
 --
 -- Fully functional and tested against a real chip.
 --
@@ -67,6 +67,7 @@ library ieee ;
 
 entity M6561 is
   generic (
+    MODE_PAL          : in    std_logic := '1';
     K_OFFSET          : in    std_logic_vector(4 downto 0) := "10000"
     );
   port (
@@ -105,12 +106,21 @@ end entity M6561;
 
 architecture RTL of M6561 is
 
+  function sel(pal,ntsc: std_logic_vector) return std_logic_vector is
+  begin
+    if (MODE_PAL = '1') then
+      return pal;
+    else
+      return ntsc;
+    end if;
+  end function;
+
   -- clocks per line must be divisable by 4
-  constant CLOCKS_PER_LINE_M1 : std_logic_vector(8 downto 0) := "100011011"; -- 284 -1
-  constant TOTAL_LINES_M1     : std_logic_vector(8 downto 0) := "100110111"; -- 312 -1
-  constant H_START_M1         : std_logic_vector(8 downto 0) := "000101011"; -- 44 -1
-  constant H_END_M1           : std_logic_vector(8 downto 0) := "100001111"; -- 272 -1
-  constant V_START            : std_logic_vector(8 downto 0) := "000011100"; -- 28
+  constant CLOCKS_PER_LINE_M1 : std_logic_vector(8 downto 0) := sel("100011011", "100000011"); -- 284/260 -1
+  constant TOTAL_LINES_M1     : std_logic_vector(8 downto 0) := sel("100110111", "100000100"); -- 312/260 -1
+  constant H_START_M1         : std_logic_vector(8 downto 0) := sel("000101011", "000000111"); -- 44/16 -1
+  constant H_END_M1           : std_logic_vector(8 downto 0) := sel("100001111", "011110011"); -- 272/244 -1
+  constant V_START            : std_logic_vector(8 downto 0) := sel("000011100", "000010000"); -- 28/16
   -- video size 228 pixels by 284 lines
 
   -- close to original                               RGB
@@ -175,6 +185,7 @@ architecture RTL of M6561 is
   -- timing
   signal hcnt             : std_logic_vector(8 downto 0) := "000000000";
   signal vcnt             : std_logic_vector(8 downto 0) := "000000000";
+  signal ccnt             : std_logic_vector(2 downto 0) := "000"; -- for 4/3.5 divider
 
   signal do_hsync         : boolean;
   signal hblank           : std_logic;
@@ -243,8 +254,24 @@ architecture RTL of M6561 is
 begin
 
   -- clocking
-  p2_h_int     <= not hcnt(1);
-  ena_1mhz_int <= hcnt(0) and p2_h_int;  -- hcnt="01";
+  p_ccnt : process (I_CLK, I_RESET_L) is
+  begin
+    if (I_RESET_L = '0') then
+      ccnt <= "000";
+    elsif rising_edge(I_CLK) then
+      if (I_ENA_4 = '1') then
+        ccnt <= ccnt + "1";
+        -- PAL: clk/8
+        -- NTSC: clk/7
+        if (MODE_PAL = '0' and ccnt = "110") then
+          ccnt <= "000";
+        end if;
+      end if;
+    end if;
+  end process;
+
+  p2_h_int     <= not ccnt(1);
+  ena_1mhz_int <= ccnt(0) and p2_h_int;  -- ccnt="01";
   O_ENA_1MHZ <= ena_1mhz_int;
   O_P2_H <= p2_h_int; -- vic access when P2_H = '0'
 
