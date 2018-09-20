@@ -136,6 +136,7 @@ architecture RTL of VIC20 is
     signal c_ena              : std_logic;
     signal c_addr             : std_logic_vector(23 downto 0);
     signal c_din              : std_logic_vector(7 downto 0);
+    signal c_din_s            : std_logic_vector(7 downto 0);
     signal c_dout             : std_logic_vector(7 downto 0);
     signal c_rw_l             : std_logic;
     signal c_irq_l            : std_logic;
@@ -304,6 +305,7 @@ begin
       );
 
   c_ena <= ena_1mhz and ena_4; -- clk ena
+  c_din_s <= c_dout when c_rw_l = '0' else c_din;
 
   cpu : entity work.T65
       port map (
@@ -326,7 +328,7 @@ begin
           VDA     => open,
           VPA     => open,
           A       => c_addr,
-          DI      => c_din,
+          DI      => c_din_s,
           DO      => c_dout
       );
 
