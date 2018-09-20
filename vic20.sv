@@ -66,8 +66,7 @@ assign LED = ~ioctl_download & ~led_disk;
 
 localparam CONF_STR =
 {
-    "VIC20;PRG;",
-    "F1,CRT,Load;",
+    "VIC20;PRGCRT;",
     "S,D64,Mount Disk;",
     "O2,CRT with load address,Yes,No;",
     "OAB,Scanlines,Off,25%,50%,75%;",
@@ -331,7 +330,7 @@ always @(negedge clk_sys) begin
     old_prg_download <= prg_download;
     ioctl_ram_wr <= 0;
     if (prg_download && ioctl_wr) begin
-        if (ioctl_index[4:0] == 5'h1 | ~status[2]) begin //cart/prg loading with address in the first 2 bytes
+        if (~status[2]) begin //cart/prg loading with address in the first 2 bytes
             if (ioctl_addr == 16'h0000) ioctl_prg_addr[7:0] <= ioctl_dout; else
             if (ioctl_addr == 16'h0001) ioctl_prg_addr[15:8] <= ioctl_dout; else begin
                 ioctl_ram_wr <= 1;
