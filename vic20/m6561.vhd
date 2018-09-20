@@ -67,7 +67,6 @@ library ieee ;
 
 entity M6561 is
   generic (
-    MODE_PAL          : in    std_logic := '1';
     K_OFFSET          : in    std_logic_vector(4 downto 0) := "10000"
     );
   port (
@@ -97,6 +96,7 @@ entity M6561 is
     O_COMP_SYNC_L     : out   std_logic;
     O_DE              : out   std_logic;
     --
+    I_PAL             : in    std_logic;
     --
     I_LIGHT_PEN       : in    std_logic;
     I_POTX            : in    std_logic;
@@ -106,22 +106,25 @@ end entity M6561;
 
 architecture RTL of M6561 is
 
-  function sel(pal,ntsc: std_logic_vector) return std_logic_vector is
-  begin
-    if (MODE_PAL = '1') then
-      return pal;
-    else
-      return ntsc;
-    end if;
-  end function;
-
   -- clocks per line must be divisable by 4
-  constant CLOCKS_PER_LINE_M1 : std_logic_vector(8 downto 0) := sel("100011011", "100000011"); -- 284/260 -1
-  constant TOTAL_LINES_M1     : std_logic_vector(8 downto 0) := sel("100110111", "100000100"); -- 312/260 -1
-  constant H_START_M1         : std_logic_vector(8 downto 0) := sel("000101011", "000011111"); -- 44/32 -1
-  constant H_END_M1           : std_logic_vector(8 downto 0) := sel("100001111", "011110011"); -- 272/244 -1
-  constant V_START            : std_logic_vector(8 downto 0) := sel("000011100", "000010000"); -- 28
-  -- video size 228 pixels by 284 lines
+  constant PAL_CLOCKS_PER_LINE_M1  : std_logic_vector(8 downto 0) := "100011011"; -- 284 -1
+  constant PAL_TOTAL_LINES_M1      : std_logic_vector(8 downto 0) := "100110111"; -- 312 -1
+  constant PAL_H_START_M1          : std_logic_vector(8 downto 0) := "000101011"; -- 44 -1
+  constant PAL_H_END_M1            : std_logic_vector(8 downto 0) := "100001111"; -- 272 -1
+  constant PAL_V_START             : std_logic_vector(8 downto 0) := "000011100"; -- 28
+  -- video size 228 pixels by 284 lines (PAL)
+
+  constant NTSC_CLOCKS_PER_LINE_M1 : std_logic_vector(8 downto 0) := "100000011"; -- 260 -1
+  constant NTSC_TOTAL_LINES_M1     : std_logic_vector(8 downto 0) := "100000100"; -- 260 (not -1)
+  constant NTSC_H_START_M1         : std_logic_vector(8 downto 0) := "000011111"; -- 32 -1
+  constant NTSC_H_END_M1           : std_logic_vector(8 downto 0) := "011101011"; -- 236 -1
+  constant NTSC_V_START            : std_logic_vector(8 downto 0) := "000010000"; -- 16
+
+  signal CLOCKS_PER_LINE_M1        : std_logic_vector(8 downto 0);
+  signal TOTAL_LINES_M1            : std_logic_vector(8 downto 0);
+  signal H_START_M1                : std_logic_vector(8 downto 0);
+  signal H_END_M1                  : std_logic_vector(8 downto 0);
+  signal V_START                   : std_logic_vector(8 downto 0);
 
   -- close to original                               RGB
   constant col0 : std_logic_vector(11 downto 0) := x"000";  -- 0 - 0000   Black
@@ -251,6 +254,12 @@ architecture RTL of M6561 is
   signal audio_mul_out    : std_logic_vector(7 downto 0);
 
 begin
+
+  CLOCKS_PER_LINE_M1 <= PAL_CLOCKS_PER_LINE_M1 when I_PAL = '1' else NTSC_CLOCKS_PER_LINE_M1;
+  TOTAL_LINES_M1     <= PAL_TOTAL_LINES_M1     when I_PAL = '1' else NTSC_TOTAL_LINES_M1;
+  H_START_M1         <= PAL_H_START_M1         when I_PAL = '1' else NTSC_H_START_M1;
+  H_END_M1           <= PAL_H_END_M1           when I_PAL = '1' else NTSC_H_END_M1;
+  V_START            <= PAL_V_START            when I_PAL = '1' else NTSC_V_START;
 
   -- clocking
   p2_h_int     <= not hcnt(1);

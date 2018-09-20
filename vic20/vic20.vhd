@@ -259,6 +259,17 @@ architecture RTL of VIC20 is
     end function;
     constant kernal_rom_file  : string := kernal_rom_file_f;
 
+    function freq_in_f return natural is
+    begin
+        if (MODE_PAL='1') then
+            return 8867236;
+        else
+            return 7159090;
+        end if;
+    end function;
+
+    constant freq_in  : natural := freq_in_f;
+
 begin
   o_p2_h <= p2_h;
 
@@ -309,13 +320,11 @@ begin
   reset_l <= not i_reset;
   --
   u_clocks : entity work.VIC20_CLOCKS
-    generic map (
-      MODE_PAL        => MODE_PAL
-    )
     port map (
       I_SYSCLK          => i_sysclk,
       I_SYSCLK_EN       => i_sysclk_en,
       I_RESET_L         => reset_l,
+      I_PAL             => MODE_PAL,
       --
       O_ENA             => ena_4,
       O_RESET_L         => reset_l_sampled
@@ -351,7 +360,6 @@ begin
 
   vic : entity work.M6561
     generic map (
-      MODE_PAL        => MODE_PAL,
       K_OFFSET        => K_OFFSET
       )
     port map (
@@ -381,6 +389,7 @@ begin
       O_COMP_SYNC_L   => csync,
       O_DE            => de,
       --
+      I_PAL           => MODE_PAL,
       --
       I_LIGHT_PEN     => light_pen,
       I_POTX          => '0',
@@ -393,7 +402,7 @@ begin
           highpass_g   => false,
           R_ohms_g     => 1000,    -- 1kOhms   \  LP from output
           C_p_farads_g => 10000,   -- 10 nF    /  with ~16kHz fg
-          fclk_hz_g => 8867236,    -- we use the sysclk
+          fclk_hz_g => freq_in,    -- we use the sysclk
           cwidth_g  => 12,
           dwidthi_g => 6,
           dwidtho_g => 16
@@ -411,7 +420,7 @@ begin
           highpass_g   => false,
           R_ohms_g     => 1000,    -- 1kOhms   \  LP on PCB
           C_p_farads_g => 100000,  -- 100 nF   /  with ~1.6kHz fg
-          fclk_hz_g => 8867236,    -- we use the sysclk
+          fclk_hz_g => freq_in,    -- we use the sysclk
           cwidth_g  => 14,
           dwidthi_g => 16,
           dwidtho_g => 16
@@ -429,7 +438,7 @@ begin
           highpass_g   => true,
           R_ohms_g     => 1000,      -- 1kOhms   \  HP to connector
           C_p_farads_g => 1000000,   -- 1 uF     /  with ~160Hz fg
-          fclk_hz_g => 8867236,      -- we use the sysclk
+          fclk_hz_g => freq_in,      -- we use the sysclk
           cwidth_g  => 16,
           dwidthi_g => 16,
           dwidtho_g => 16

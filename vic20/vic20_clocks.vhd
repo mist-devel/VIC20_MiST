@@ -51,13 +51,11 @@ library ieee;
   use ieee.numeric_std.all;
 
 entity VIC20_CLOCKS is
-  generic (
-    MODE_PAL              : in    std_logic := '1'
-    );
   port (
     I_SYSCLK          : in    std_logic;
     I_SYSCLK_EN       : in    std_logic;
     I_RESET_L         : in    std_logic;
+    I_PAL             : in    std_logic;
     --
     O_ENA             : out   std_logic;
     O_RESET_L         : out   std_logic
@@ -93,7 +91,7 @@ begin
       div_cnt <= (others => '0');
     elsif rising_edge(I_SYSCLK) then
       if (I_SYSCLK_EN='1') then
-        if (MODE_PAL = '0' and div_cnt = "111") then
+        if (I_PAL = '0' and div_cnt = "111") then
             div_cnt <= "001"; -- 4 enable/7 ticks in NTSC mode
         else
             div_cnt <= div_cnt + "1";
