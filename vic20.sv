@@ -370,7 +370,7 @@ sigma_delta_dac #(15) dac_l
 (
     .CLK(clk_sys),
     .RESET(reset),
-    .DACin(vic_audio),
+    .DACin({1'b0, vic_audio[15:1]}),
     .DACout(AUDIO_L)
 );
 
@@ -378,7 +378,7 @@ sigma_delta_dac #(15) dac_r
 (
     .CLK(clk_sys),
     .RESET(reset),
-    .DACin(vic_audio),
+    .DACin({1'b0, vic_audio[15:1]}),
     .DACout(AUDIO_R)
 );
 //////////////////   VIDEO   //////////////////
