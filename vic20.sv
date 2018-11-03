@@ -1,7 +1,7 @@
 //============================================================================
 // 
 //  VIC20 replica for MiST
-//  Copyright (C) 2018 György Szombathelyi
+//  Copyright (C) 2018 GyÃ¶rgy Szombathelyi
 //
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
@@ -85,7 +85,6 @@ wire clk_ntsc;
 wire clk_sys = MODE_PAL ? clk_pal : clk_ntsc;
 wire clk_1541;
 reg clk8m;
-reg clk16m;
 wire pll_locked;
 reg clk_ref; //sync sdram to during prg downloading
 reg  reset;
@@ -105,7 +104,6 @@ pll27 pll
 always @(posedge clk_sys) begin
     reg [4:0] sys_count;
     clk8m <= !sys_count[1:0];
-    clk16m <= !sys_count[0];
     clk_ref <= !sys_count;
     sys_count <= sys_count + 1'd1;
     
@@ -209,11 +207,11 @@ vic20 #(.MODE_PAL(MODE_PAL)) VIC20
 
     .I_JOY(~{vic20_joy[0],vic20_joy[1],vic20_joy[2],vic20_joy[3]}),
     .I_FIRE(~vic20_joy[4]),
-    .O_VIDEO_R(VGA_R_O),
-    .O_VIDEO_G(VGA_G_O),
-    .O_VIDEO_B(VGA_B_O),
-    .O_HSYNC(VGA_HS_O),
-    .O_VSYNC(VGA_VS_O),
+    .O_VIDEO_R(R_O),
+    .O_VIDEO_G(G_O),
+    .O_VIDEO_B(B_O),
+    .O_HSYNC(HS_O),
+    .O_VSYNC(VS_O),
 //    .O_DE     => core_blankn_s,
 
 	.atn_o(vic20_iec_atn_o),
@@ -383,11 +381,11 @@ sigma_delta_dac #(15) dac_r
 );
 //////////////////   VIDEO   //////////////////
 
-wire  [3:0] VGA_R_O;
-wire  [3:0] VGA_G_O;
-wire  [3:0] VGA_B_O;
-wire        VGA_HS_O;
-wire        VGA_VS_O;
+wire  [3:0] R_O;
+wire  [3:0] G_O;
+wire  [3:0] B_O;
+wire        HS_O;
+wire        VS_O;
 wire        SD_HS_O;
 wire        SD_VS_O;
 wire        osd_hs_in;
@@ -402,22 +400,22 @@ wire  [5:0] osd_b_in;
 
 wire        vsync_out;
 wire        hsync_out;
-wire        csync_out = (hsync_out == vsync_out);
+wire        csync_out = (HS_O == VS_O);
 
 // a minimig vga->scart cable expects a composite sync signal on the VGA_HS output.
 // and VCC on VGA_VS (to switch into rgb mode)
-assign      VGA_HS = (scandoubler_disable || ypbpr)? csync_out : hsync_out;
-assign      VGA_VS = (scandoubler_disable || ypbpr)? 1'b1 : vsync_out;
+assign      VGA_HS = (scandoubler_disable || ypbpr)? csync_out : SD_HS_O;
+assign      VGA_VS = (scandoubler_disable || ypbpr)? 1'b1 : SD_VS_O;
 
 scandoubler scandoubler
 (
     .clk_sys(clk_sys),
     .scanlines(status[11:10]),
-    .hs_in(VGA_HS_O),
-    .vs_in(VGA_VS_O),
-    .r_in(VGA_R_O),
-    .g_in(VGA_G_O),
-    .b_in(VGA_B_O),
+    .hs_in(HS_O),
+    .vs_in(VS_O),
+    .r_in(R_O),
+    .g_in(G_O),
+    .b_in(B_O),
     .hs_out(SD_HS_O),
     .vs_out(SD_VS_O),
     .r_out(SD_R_O),
@@ -430,24 +428,21 @@ wire [5:0] osd_r_o, osd_g_o, osd_b_o;
 osd osd
 (
     .clk_sys(clk_sys),
-    .ce_pix(scandoubler_disable ? clk8m : clk16m),
-    .sdi(SPI_DI),
-    .sck(SPI_SCK),
-    .ss(SPI_SS3),
-    .red_in(scandoubler_disable ? {VGA_R_O, 2'b00} : SD_R_O),
-    .green_in(scandoubler_disable ? {VGA_G_O, 2'b00} : SD_G_O),
-    .blue_in(scandoubler_disable ? {VGA_B_O, 2'b00} : SD_B_O),
-    .hs_in(scandoubler_disable ? VGA_HS_O : SD_HS_O),
-    .vs_in(scandoubler_disable ? VGA_VS_O : SD_VS_O),
-    .red_out(osd_r_o),
-    .green_out(osd_g_o),
-    .blue_out(osd_b_o),
-    .hs_out(hsync_out),
-    .vs_out(vsync_out)
+    .SPI_DI(SPI_DI),
+    .SPI_SCK(SPI_SCK),
+    .SPI_SS3(SPI_SS3),
+    .R_in(scandoubler_disable ? {R_O, 2'b00} : SD_R_O),
+    .G_in(scandoubler_disable ? {G_O, 2'b00} : SD_G_O),
+    .B_in(scandoubler_disable ? {B_O, 2'b00} : SD_B_O),
+    .HSync(scandoubler_disable ? HS_O : SD_HS_O),
+    .VSync(scandoubler_disable ? VS_O : SD_VS_O),
+    .R_out(osd_r_o),
+    .G_out(osd_g_o),
+    .B_out(osd_b_o)
     );
 
 wire [5:0] y, pb, pr;
-	 
+
 rgb2ypbpr rgb2ypbpr 
 (
 	.red   ( osd_r_o ),
