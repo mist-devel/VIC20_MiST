@@ -58,8 +58,6 @@ module vic20_mist
    output        SDRAM_CKE
 );
 
-parameter MODE_PAL = 1'b1;
-
 assign LED = ~ioctl_download & ~led_disk;
 
 `include "build_id.v"
@@ -68,6 +66,7 @@ localparam CONF_STR =
 {
     "VIC20;PRGCRT;",
     "S,D64,Mount Disk;",
+    "O3,Video,PAL,NTSC;",
     "O2,CRT with load address,Yes,No;",
     "OAB,Scanlines,Off,25%,50%,75%;",
     "O45,Enable 8K+ Expansion,Off,8K,16K,24K;",
@@ -80,10 +79,10 @@ localparam CONF_STR =
 
 
 ////////////////////   CLOCKS   ///////////////////
-wire clk_pal;
-wire clk_ntsc;
-wire clk_sys = MODE_PAL ? clk_pal : clk_ntsc;
-wire clk_1541;
+wire ntsc = status[3];
+wire clk_sys;
+wire clk_32;
+wire clk_1541 = clk_32;
 reg clk8m;
 wire pll_locked;
 reg clk_ref; //sync sdram to during prg downloading
@@ -92,13 +91,125 @@ reg  c1541_reset;
 reg cart_unload;
 reg force_reset;
 
+wire       pll_reconfig_busy;
+wire       pll_areset;
+wire       pll_configupdate;
+wire       pll_scanclk;
+wire       pll_scanclkena;
+wire       pll_scandata;
+wire       pll_scandataout;
+wire       pll_scandone;
+wire       pll_reconfig_reset;
+wire [7:0] pll_rom_address;
+wire       pll_rom_q;
+wire       pll_write_from_rom;
+wire       pll_write_rom_ena;
+wire       pll_reconfig;
+wire       q_reconfig_ntsc;
+wire       q_reconfig_pal;
+
+rom_reconfig_pal rom_reconfig_pal
+(
+    .address(pll_rom_address),
+    .clock(clk_32),
+    .rden(pll_write_rom_ena),
+    .q(q_reconfig_pal)
+);
+
+rom_reconfig_ntsc rom_reconfig_ntsc
+(
+    .address(pll_rom_address),
+    .clock(clk_32),
+    .rden(pll_write_rom_ena),
+    .q(q_reconfig_ntsc)
+);
+
+assign pll_rom_q = ntsc ? q_reconfig_ntsc : q_reconfig_pal;
+
+pll_reconfig pll_reconfig_inst
+(
+    .busy(pll_reconfig_busy),
+    .clock(clk_32),
+    .counter_param(0),
+    .counter_type(0),
+    .data_in(0),
+    .pll_areset(pll_areset),
+    .pll_areset_in(0),
+    .pll_configupdate(pll_configupdate),
+    .pll_scanclk(pll_scanclk),
+    .pll_scanclkena(pll_scanclkena),
+    .pll_scandata(pll_scandata),
+    .pll_scandataout(pll_scandataout),
+    .pll_scandone(pll_scandone),
+    .read_param(0),
+    .reconfig(pll_reconfig),
+    .reset(pll_reconfig_reset),
+    .reset_rom_address(0),
+    .rom_address_out(pll_rom_address),
+    .rom_data_in(pll_rom_q),
+    .write_from_rom(pll_write_from_rom),
+    .write_param(0),
+    .write_rom_ena(pll_write_rom_ena)
+);
+
+pll_vic20 pll_vic20
+(
+    .inclk0(CLOCK_27[0]),
+    .c0(clk_sys),  //35.48 MHz PAL, 28.63 MHz NTSC
+    .areset(pll_areset),
+    .scanclk(pll_scanclk),
+    .scandata(pll_scandata),
+    .scanclkena(pll_scanclkena),
+    .configupdate(pll_configupdate),
+    .scandataout(pll_scandataout),
+    .scandone(pll_scandone),
+    .locked(pll_locked)
+);
+
+always @(posedge clk_32) begin
+    reg ntsc_d, ntsc_d2, ntsc_d3;
+    reg [1:0] pll_reconfig_state = 0;
+    reg [9:0] pll_reconfig_timeout;
+
+    ntsc_d <= ntsc;
+    ntsc_d2 <= ntsc_d;
+    pll_write_from_rom <= 0;
+    pll_reconfig <= 0;
+    pll_reconfig_reset <= 0;
+    case (pll_reconfig_state)
+    2'b00:
+    begin
+        ntsc_d3 <= ntsc_d2;
+        if (ntsc_d2 ^ ntsc_d3) begin
+            pll_write_from_rom <= 1;
+            pll_reconfig_state <= 2'b01;
+        end
+    end
+    2'b01: pll_reconfig_state <= 2'b10;
+    2'b10:
+        if (~pll_reconfig_busy) begin
+            pll_reconfig <= 1;
+            pll_reconfig_state <= 2'b11;
+            pll_reconfig_timeout <= 10'd1000;
+        end
+    2'b11:
+    begin
+        pll_reconfig_timeout <= pll_reconfig_timeout - 1'd1;
+        if (pll_reconfig_timeout == 10'd1) begin
+            // pll_reconfig stuck in busy state
+            pll_reconfig_reset <= 1;
+            pll_reconfig_state <= 2'b00;
+        end
+        if (~pll_reconfig & ~pll_reconfig_busy) pll_reconfig_state <= 2'b00;
+    end
+    default: ;
+    endcase
+end
+
 pll27 pll
 (
     .inclk0(CLOCK_27[0]),
-    .c0(clk_pal),  //35.48 MHz
-    .c1(clk_ntsc), //28.63 MHz
-    .c2(clk_1541), //32 MHz
-    .locked(pll_locked)
+    .c0(clk_32) //32 MHz
 );
 
 always @(posedge clk_sys) begin
@@ -199,11 +310,12 @@ keyboard keyboard
 
 wire  [7:0] vic20_joy = joystick_0 | joystick_1;
 
-vic20 #(.MODE_PAL(MODE_PAL)) VIC20
+vic20 VIC20
 (
     .I_SYSCLK(clk_sys),
     .I_SYSCLK_EN(clk8m & ~ioctl_download),
     .I_RESET(reset),
+    .I_PAL(~ntsc),
 
     .I_JOY(~{vic20_joy[0],vic20_joy[1],vic20_joy[2],vic20_joy[3]}),
     .I_FIRE(~vic20_joy[4]),
@@ -304,8 +416,8 @@ data_io data_io (
 always_comb begin
     casex ({rom_download, ioctl_addr[15:13]})
         'b1_00X: ioctl_target_addr = {2'b00, ioctl_addr[13:0]}; //1541
-        'b1_010: ioctl_target_addr = {MODE_PAL ? 3'b111 : 3'b011, ioctl_addr[12:0]}; //kernal - PAL
-        'b1_011: ioctl_target_addr = {MODE_PAL ? 3'b011 : 3'b111, ioctl_addr[12:0]}; //kernal - NTSC
+        'b1_010: ioctl_target_addr = {3'b111, ioctl_addr[12:0]}; //kernal pal
+        'b1_011: ioctl_target_addr = {3'b111, ioctl_addr[12:0]}; //kernal ntsc
         'b1_100: ioctl_target_addr = {3'b110, ioctl_addr[12:0]}; //basic
         'b1_101: ioctl_target_addr = {4'b1000, ioctl_addr[11:0]}; //character
         'b0_XXX: ioctl_target_addr = ioctl_reg_inject_state ? ioctl_reg_addr : ioctl_prg_addr;

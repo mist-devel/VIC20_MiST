@@ -55,15 +55,13 @@ library ieee ;
 --  use UNISIM.Vcomponents.all;
 
 entity VIC20 is
-  generic (
-    MODE_PAL              : in    std_logic := '1'
-    );
   port (
     --
     i_sysclk              : in    std_logic;  -- comes from CLK_A via DCM (divided by 4)
     i_sysclk_en           : in    std_logic;  -- 8.867236 MHz (PAL),
                                               -- 7.15909 (NTSC) enable signal
     i_reset               : in    std_logic;
+    i_pal                 : in    std_logic;
     -- serial bus pins
     atn_o                 : out std_logic; -- open drain
     atn_i                 : in  std_logic;
@@ -183,6 +181,8 @@ architecture RTL of VIC20 is
     -- rom
     signal char_rom_dout      : std_logic_vector(7 downto 0);
     signal basic_rom_dout     : std_logic_vector(7 downto 0);
+    signal kernal_pal_dout    : std_logic_vector(7 downto 0);
+    signal kernal_ntsc_dout   : std_logic_vector(7 downto 0);
     signal kernal_rom_dout    : std_logic_vector(7 downto 0);
 
     -- expansion
@@ -245,30 +245,11 @@ architecture RTL of VIC20 is
     signal csync              : std_logic;
     signal de                 : std_logic;
     
-    signal kernal_wr          : std_logic;
+    signal kernal_pal_wr      : std_logic;
+    signal kernal_ntsc_wr     : std_logic;
+    signal kernal_pal_written : std_logic := '0';
     signal basic_wr           : std_logic;
     signal char_wr            : std_logic;
-
-    function kernal_rom_file_f return string is
-	 begin
-	   if (MODE_PAL = '1') then
-        return("../roms/KERNAL_PAL.HEX");
-      else
-        return("../roms/KERNAL_NTSC.HEX");
-      end if;
-    end function;
-    constant kernal_rom_file  : string := kernal_rom_file_f;
-
-    function freq_in_f return natural is
-    begin
-        if (MODE_PAL='1') then
-            return 8867236;
-        else
-            return 7159090;
-        end if;
-    end function;
-
-    constant freq_in  : natural := freq_in_f;
 
 begin
   o_p2_h <= p2_h;
@@ -324,7 +305,7 @@ begin
       I_SYSCLK          => i_sysclk,
       I_SYSCLK_EN       => i_sysclk_en,
       I_RESET_L         => reset_l,
-      I_PAL             => MODE_PAL,
+      I_PAL             => i_pal,
       --
       O_ENA             => ena_4,
       O_RESET_L         => reset_l_sampled
@@ -389,7 +370,7 @@ begin
       O_COMP_SYNC_L   => csync,
       O_DE            => de,
       --
-      I_PAL           => MODE_PAL,
+      I_PAL           => i_pal,
       --
       I_LIGHT_PEN     => light_pen,
       I_POTX          => '0',
@@ -402,7 +383,7 @@ begin
           highpass_g   => false,
           R_ohms_g     => 1000,    -- 1kOhms   \  LP from output
           C_p_farads_g => 10000,   -- 10 nF    /  with ~16kHz fg
-          fclk_hz_g => freq_in,    -- we use the sysclk
+          fclk_hz_g => 8867236,    -- we use the sysclk
           cwidth_g  => 12,
           dwidthi_g => 6,
           dwidtho_g => 16
@@ -420,7 +401,7 @@ begin
           highpass_g   => false,
           R_ohms_g     => 1000,    -- 1kOhms   \  LP on PCB
           C_p_farads_g => 100000,  -- 100 nF   /  with ~1.6kHz fg
-          fclk_hz_g => freq_in,    -- we use the sysclk
+          fclk_hz_g => 8867236,    -- we use the sysclk
           cwidth_g  => 14,
           dwidthi_g => 16,
           dwidtho_g => 16
@@ -438,7 +419,7 @@ begin
           highpass_g   => true,
           R_ohms_g     => 1000,      -- 1kOhms   \  HP to connector
           C_p_farads_g => 1000000,   -- 1 uF     /  with ~160Hz fg
-          fclk_hz_g => freq_in,      -- we use the sysclk
+          fclk_hz_g => 8867236,      -- we use the sysclk
           cwidth_g  => 16,
           dwidthi_g => 16,
           dwidtho_g => 16
@@ -879,24 +860,51 @@ begin
       data      => conf_di
       );
 
-  kernal_wr <= '1' when conf_ai(15 downto 13) = "111" else '0';
+  process (i_sysclk) begin
+    if rising_edge(i_sysclk) then
+        if conf_ai = x"ffff" then kernal_pal_written <= '1'; end if;
+    end if;
+  end process;
 
-  kernal_rom : entity work.gen_rom
+  kernal_pal_wr <= '1' when conf_ai(15 downto 13) = "111" and kernal_pal_written = '0' else '0';
+
+  kernal_rom_pal : entity work.gen_rom
     generic map (
       ADDR_WIDTH => 13,
       --START_AI => "1110000000000000",   -- 0xE000
-      INIT_FILE => kernal_rom_file
+      INIT_FILE => "../roms/KERNAL_PAL.HEX"
     )
     port map (
       rdclock   => i_sysclk,
       rdaddress => c_addr(12 downto 0),
-      q         => kernal_rom_dout,
+      q         => kernal_pal_dout,
       cs        => '1',
       wrclock   => i_sysclk,
-      wren      => conf_wr and kernal_wr,
+      wren      => conf_wr and kernal_pal_wr,
       wraddress => conf_ai(12 downto 0),
       data      => conf_di
       );
+
+  kernal_ntsc_wr <= '1' when conf_ai(15 downto 13) = "111" and kernal_pal_written = '1' else '0';
+
+  kernal_rom_ntsc : entity work.gen_rom
+    generic map (
+      ADDR_WIDTH => 13,
+      --START_AI => "1110000000000000",   -- 0xE000
+      INIT_FILE => "../roms/KERNAL_NTSC.HEX"
+    )
+    port map (
+      rdclock   => i_sysclk,
+      rdaddress => c_addr(12 downto 0),
+      q         => kernal_ntsc_dout,
+      cs        => '1',
+      wrclock   => i_sysclk,
+      wren      => conf_wr and kernal_ntsc_wr,
+      wraddress => conf_ai(12 downto 0),
+      data      => conf_di
+      );
+
+  kernal_rom_dout <= kernal_pal_dout when i_pal = '1' else kernal_ntsc_dout;
 
   p_video_output : process
   begin
