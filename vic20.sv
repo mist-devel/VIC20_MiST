@@ -84,6 +84,7 @@ wire clk_sys;
 wire clk_32;
 wire clk_1541 = clk_32;
 reg clk8m;
+reg clk16m;
 wire pll_locked;
 reg clk_ref; //sync sdram to during prg downloading
 reg  reset;
@@ -215,6 +216,7 @@ pll27 pll
 always @(posedge clk_sys) begin
     reg [4:0] sys_count;
     clk8m <= !sys_count[1:0];
+    clk16m <= sys_count[0];
     clk_ref <= !sys_count;
     sys_count <= sys_count + 1'd1;
     
@@ -540,6 +542,7 @@ wire [5:0] osd_r_o, osd_g_o, osd_b_o;
 osd osd
 (
     .clk_sys(clk_sys),
+    .ce_pix(scandoubler_disable ? clk8m : clk16m),
     .SPI_DI(SPI_DI),
     .SPI_SCK(SPI_SCK),
     .SPI_SS3(SPI_SS3),
