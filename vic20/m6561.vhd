@@ -723,7 +723,9 @@ begin
 
   p_sound_gen : process (I_CLK) is
     variable noise_zero : std_ulogic;
-    variable a_sum : unsigned(5 downto 0); -- sum is 0 to 4*15
+    variable a_sum : unsigned(5 downto 0); -- sum is 0 to 4*15	
+    variable wave_max_value : unsigned(5 downto 0);
+    variable wave_mid_value : unsigned(5 downto 0);
   begin
     if rising_edge(I_CLK) then
       if (I_ENA_4 = '1') then
@@ -761,31 +763,54 @@ begin
           noise_zero := '1';
         end if;
         if audio_div_16 then
-          if (noise_sg_cnt = "0000000") then
-            noise_sg_cnt <= noise_sg_freq(6 downto 0) - "1";
-            noise_gen(18 downto 2) <= noise_gen(17 downto 1);
-            noise_gen(1)           <= noise_gen(0) xor noise_zero;
-            noise_gen(0)           <= noise_gen(0) xor noise_gen(1) xor
-                                      noise_gen(4) xor noise_gen(18);
-            noise_sg <= noise_gen(9);
-          else
-            noise_sg_cnt <= noise_sg_cnt - "1";
+          if r_noise_sound(7)='1' then  -- advance only when generator is enabled
+            if (noise_sg_cnt = "0000000") then
+              noise_sg_cnt <= noise_sg_freq(6 downto 0) - "1";
+              noise_gen(18 downto 2) <= noise_gen(17 downto 1);
+              noise_gen(1)           <= noise_gen(0) xor noise_zero;
+              noise_gen(0)           <= noise_gen(0) xor noise_gen(1) xor noise_gen(4) xor noise_gen(18);
+              noise_sg <= noise_gen(9);
+            else
+              noise_sg_cnt <= noise_sg_cnt - "1";
+            end if;
+          end if;	 
+        end if;
+        -- 'mixer'        
+        wave_max_value := unsigned("00"  & r_amplitude);             
+        wave_mid_value := unsigned("000" & r_amplitude(3 downto 1)); -- value when sound generator is muted 
+        a_sum := "000000";        
+        if r_base_sound(7)='1' then
+          if base_sg ='1' then 
+            a_sum := a_sum + wave_max_value; 
           end if;
+        else
+          a_sum := a_sum + wave_mid_value;  
+        end if;		  
+        if r_alto_sound(7)='1' then
+          if alto_sg='1' then
+            a_sum := a_sum + wave_max_value;
+          end if;
+        else
+          a_sum := a_sum + wave_mid_value;
+        end if;		  
+        if r_soprano_sound(7)='1' then 
+          if soprano_sg='1' then
+            a_sum := a_sum + wave_max_value;
+          end if;	
+        else
+          a_sum := a_sum + wave_mid_value;
         end if;
-        -- 'mixer'
-        a_sum := "000000";
-        if (r_base_sound(7) and base_sg)='1' then
-          a_sum := a_sum + unsigned("00"&r_amplitude);
-        end if;
-        if (r_alto_sound(7) and alto_sg)='1' then
-          a_sum := a_sum + unsigned("00"&r_amplitude);
-        end if;
-        if (r_soprano_sound(7) and soprano_sg)='1' then
-          a_sum := a_sum + unsigned("00"&r_amplitude);
-        end if;
-        if (r_noise_sound(7) and noise_sg)='1' then
-          a_sum := a_sum + unsigned("00"&r_amplitude);
-        end if;
+        if r_noise_sound(7)='1' then
+          if noise_sg='1' then
+            a_sum := a_sum + wave_max_value;
+          end if;	
+        else	 		    
+          if noise_sg='1' then                    
+            a_sum := a_sum + wave_max_value;  -- when muted the noise generator 
+          else                                -- outputs high if it's in the '1' state
+            a_sum := a_sum + wave_mid_value;       
+          end if;	
+        end if;		  
         O_AUDIO<=std_logic_vector(a_sum);
       end if;
     end if;
