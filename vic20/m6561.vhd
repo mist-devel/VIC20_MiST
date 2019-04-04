@@ -234,11 +234,9 @@ architecture RTL of M6561 is
   signal light_pen_in_t2  : std_logic;
 
   -- audio
-  signal audio_div        : std_logic_vector(9 downto 0):= (others => '0');
-  signal audio_div_t1     : std_logic_vector(9 downto 0);
-  signal audio_div_256    : boolean;
-  signal audio_div_128    : boolean;
+  signal audio_div        : std_logic_vector(5 downto 0):= (others => '0');
   signal audio_div_64     : boolean;
+  signal audio_div_32     : boolean;
   signal audio_div_16     : boolean;
 
   signal base_sg          : std_logic;
@@ -738,13 +736,11 @@ begin
     if rising_edge(I_CLK) then
       if (I_ENA_4 = '1') then
         audio_div <= audio_div + "1";
-        audio_div_t1 <= audio_div;
         -- /256 /4 (phi = clk4 /4) *2 as toggling output
-        audio_div_256 <= (audio_div(8) = '1') and (audio_div_t1(8) = '0');
-        audio_div_128 <= (audio_div(7) = '1') and (audio_div_t1(7) = '0');
-        audio_div_64  <= (audio_div(6) = '1') and (audio_div_t1(6) = '0');
-        audio_div_16  <= (audio_div(4) = '1') and (audio_div_t1(4) = '0');
-      end if;
+		  audio_div_64   <= audio_div(5 downto 0) =  "000000";
+        audio_div_32   <= audio_div(4 downto 0) =   "00000";
+        audio_div_16   <= audio_div(3 downto 0) =    "0000";
+		end if;
     end if;
   end process;
 
@@ -758,9 +754,9 @@ begin
       if (I_ENA_4 = '1') then
         
         -- base
-        if audio_div_256 then
+        if audio_div_64 then
           if base_sg_cnt = "1111111" then
-            base_sg_cnt <= r_base_freq;
+            base_sg_cnt <= r_base_freq + "1";
             base_sg_sreg <= base_sg_sreg(6 downto 0) & (not base_sg_sreg(7) and r_base_enabled);
           else
             base_sg_cnt <= base_sg_cnt + "1";
@@ -769,9 +765,9 @@ begin
         base_sg <= base_sg_sreg(0);
 
         -- alto
-        if audio_div_128 then
+        if audio_div_32 then
           if alto_sg_cnt = "1111111" then
-            alto_sg_cnt <= r_alto_freq;
+            alto_sg_cnt <= r_alto_freq + "1";
             alto_sg_sreg <= alto_sg_sreg(6 downto 0) & (not alto_sg_sreg(7) and r_alto_enabled);
           else
             alto_sg_cnt <= alto_sg_cnt + "1";
@@ -780,9 +776,9 @@ begin
         alto_sg <= alto_sg_sreg(0);
         
         -- soprano
-        if audio_div_64 then
+        if audio_div_16 then
           if soprano_sg_cnt = "1111111" then
-            soprano_sg_cnt <= r_soprano_freq;
+            soprano_sg_cnt <= r_soprano_freq + "1";
             soprano_sg_sreg <= soprano_sg_sreg(6 downto 0) & (not soprano_sg_sreg(7) and r_soprano_enabled);
           else
             soprano_sg_cnt <= soprano_sg_cnt + "1";
@@ -795,10 +791,10 @@ begin
         if (noise_gen = "0000000000000000000") then
           noise_zero := '1';
         end if;
-        if audio_div_16 then
+        if audio_div_32 then
           if r_noise_enabled='1' then  -- advance only when generator is enabled
             if noise_sg_cnt = "1111111" then
-              noise_sg_cnt <= r_noise_freq;
+              noise_sg_cnt <= r_noise_freq + "1";
               noise_gen(18 downto 2) <= noise_gen(17 downto 1);
               noise_gen(1)           <= noise_gen(0) xor noise_zero;
               noise_gen(0)           <= noise_gen(0) xor noise_gen(1) xor noise_gen(4) xor noise_gen(18);              
