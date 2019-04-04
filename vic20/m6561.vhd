@@ -55,6 +55,9 @@
 -- Email vic20@fpgaarcade.com
 --
 
+-- A more accurate implementation of the three sound voices has been coded 
+-- according to the model theorized by Viznut/pwp at http://www.pelulamu.net/pwp/vic20/waveforms.txt 
+
 library ieee ;
   use ieee.std_logic_1164.all ;
   use ieee.std_logic_unsigned.all;
@@ -175,10 +178,15 @@ architecture RTL of M6561 is
   signal r_char_mem       : std_logic_vector(3 downto 0) := "0000";
   signal r_x_lightpen     : std_logic_vector(7 downto 0) := "00000000";
   signal r_y_lightpen     : std_logic_vector(7 downto 0) := "00000000";
-  signal r_base_sound     : std_logic_vector(7 downto 0) := "00000000";
-  signal r_alto_sound     : std_logic_vector(7 downto 0) := "00000000";
-  signal r_soprano_sound  : std_logic_vector(7 downto 0) := "00000000";
-  signal r_noise_sound    : std_logic_vector(7 downto 0) := "00000000";
+  signal r_base_freq      : std_logic_vector(6 downto 0) := "0000000";
+  signal r_alto_freq      : std_logic_vector(6 downto 0) := "0000000";
+  signal r_soprano_freq   : std_logic_vector(6 downto 0) := "0000000";
+  signal r_noise_freq     : std_logic_vector(6 downto 0) := "0000000";
+  signal r_base_enabled   : std_logic := '0';
+  signal r_alto_enabled   : std_logic := '0';
+  signal r_soprano_enabled: std_logic := '0';
+  signal r_noise_enabled  : std_logic := '0';
+  
   signal r_amplitude      : std_logic_vector(3 downto 0) := "0000";
   signal r_aux_colour     : std_logic_vector(3 downto 0) := "0000";
   signal r_border_colour  : std_logic_vector(2 downto 0) := "011";
@@ -226,27 +234,24 @@ architecture RTL of M6561 is
   signal light_pen_in_t2  : std_logic;
 
   -- audio
-  signal audio_div        : std_logic_vector(9 downto 0):= (others => '0');
-  signal audio_div_t1     : std_logic_vector(9 downto 0);
-  signal audio_div_256    : boolean;
-  signal audio_div_128    : boolean;
+  signal audio_div        : std_logic_vector(5 downto 0):= (others => '0');
   signal audio_div_64     : boolean;
+  signal audio_div_32     : boolean;
   signal audio_div_16     : boolean;
 
   signal base_sg          : std_logic;
-  signal base_sg_freq     : std_logic_vector(6 downto 0);
   signal base_sg_cnt      : std_logic_vector(6 downto 0) := (others => '0');
+  signal base_sg_sreg     : std_logic_vector(7 downto 0) := (others => '0');
 
   signal alto_sg          : std_logic;
-  signal alto_sg_freq     : std_logic_vector(6 downto 0);
   signal alto_sg_cnt      : std_logic_vector(6 downto 0) := (others => '0');
+  signal alto_sg_sreg     : std_logic_vector(7 downto 0) := (others => '0');
 
   signal soprano_sg       : std_logic;
-  signal soprano_sg_freq  : std_logic_vector(6 downto 0);
   signal soprano_sg_cnt   : std_logic_vector(6 downto 0) := (others => '0');
+  signal soprano_sg_sreg  : std_logic_vector(7 downto 0) := (others => '0');
 
   signal noise_sg         : std_logic;
-  signal noise_sg_freq    : std_logic_vector(6 downto 0);
   signal noise_sg_cnt     : std_logic_vector(6 downto 0) := (others => '0');
   signal noise_gen        : std_logic_vector(18 downto 0) := (others => '0');
 
@@ -285,10 +290,14 @@ begin
       r_charsize       <= '0';
       r_screen_mem     <= "11111";
       r_char_mem       <= "0000";
-      r_base_sound     <= "00000000";
-      r_alto_sound     <= "00000000";
-      r_soprano_sound  <= "00000000";
-      r_noise_sound    <= "00000000";
+      r_base_freq      <= "0000000";
+      r_alto_freq      <= "0000000";
+      r_soprano_freq   <= "0000000";
+      r_noise_freq     <= "0000000";
+      r_base_enabled   <= '0';
+      r_alto_enabled   <= '0';
+      r_soprano_enabled<= '0';
+      r_noise_enabled  <= '0';
       r_amplitude      <= "0000";
       r_aux_colour     <= "0000";
       r_border_colour  <= "011";
@@ -313,12 +322,21 @@ begin
             when x"5" => r_screen_mem(4 downto 1) <= I_DATA(7 downto 4);
                          r_char_mem(3 downto 0)   <= I_DATA(3 downto 0);
 
-            when x"A" => r_base_sound             <= I_DATA(7 downto 0);
-            when x"B" => r_alto_sound             <= I_DATA(7 downto 0);
-            when x"C" => r_soprano_sound          <= I_DATA(7 downto 0);
-            when x"D" => r_noise_sound            <= I_DATA(7 downto 0);
+            when x"A" => r_base_enabled           <= I_DATA(7);
+                         r_base_freq              <= I_DATA(6 downto 0);
+                         
+            when x"B" => r_alto_enabled           <= I_DATA(7);
+                         r_alto_freq              <= I_DATA(6 downto 0);
+            
+            when x"C" => r_soprano_enabled        <= I_DATA(7);
+                         r_soprano_freq           <= I_DATA(6 downto 0);
+            
+            when x"D" => r_noise_enabled          <= I_DATA(7);
+                         r_noise_freq             <= I_DATA(6 downto 0);
+            
             when x"E" => r_aux_colour             <= I_DATA(7 downto 4);
                          r_amplitude              <= I_DATA(3 downto 0);
+                         
             when x"F" => r_backgnd_colour         <= I_DATA(7 downto 4);
                          r_reverse_mode           <= I_DATA(3);
                          r_border_colour          <= I_DATA(2 downto 0);
@@ -357,10 +375,17 @@ begin
           when x"8" => O_DATA(7 downto 0)     <= x"00"; -- pot x
           when x"9" => O_DATA(7 downto 0)     <= x"00"; -- pot y
 
-          when x"A" => O_DATA(7 downto 0)     <= r_base_sound;
-          when x"B" => O_DATA(7 downto 0)     <= r_alto_sound;
-          when x"C" => O_DATA(7 downto 0)     <= r_soprano_sound;
-          when x"D" => O_DATA(7 downto 0)     <= r_noise_sound;
+          when x"A" => O_DATA(7)              <= r_base_enabled; 
+                       O_DATA(6 downto 0)     <= r_base_freq;
+                       
+          when x"B" => O_DATA(7)              <= r_alto_enabled; 
+                       O_DATA(6 downto 0)     <= r_alto_freq;
+          
+          when x"C" => O_DATA(7)              <= r_soprano_enabled; 
+                       O_DATA(6 downto 0)     <= r_soprano_freq;
+          
+          when x"D" => O_DATA(7)              <= r_noise_enabled; 
+                       O_DATA(6 downto 0)     <= r_noise_freq;
 
           when x"E" => O_DATA(7 downto 4)     <= r_aux_colour;
                        O_DATA(3 downto 0)     <= r_amplitude;
@@ -711,81 +736,111 @@ begin
     if rising_edge(I_CLK) then
       if (I_ENA_4 = '1') then
         audio_div <= audio_div + "1";
-        audio_div_t1 <= audio_div;
         -- /256 /4 (phi = clk4 /4) *2 as toggling output
-        audio_div_256 <= (audio_div(8) = '1') and (audio_div_t1(8) = '0');
-        audio_div_128 <= (audio_div(7) = '1') and (audio_div_t1(7) = '0');
-        audio_div_64  <= (audio_div(6) = '1') and (audio_div_t1(6) = '0');
-        audio_div_16  <= (audio_div(4) = '1') and (audio_div_t1(4) = '0');
-      end if;
+		  audio_div_64   <= audio_div(5 downto 0) =  "000000";
+        audio_div_32   <= audio_div(4 downto 0) =   "00000";
+        audio_div_16   <= audio_div(3 downto 0) =    "0000";
+		end if;
     end if;
   end process;
 
   p_sound_gen : process (I_CLK) is
     variable noise_zero : std_ulogic;
-    variable a_sum : unsigned(5 downto 0); -- sum is 0 to 4*15
+    variable a_sum : unsigned(5 downto 0); -- sum is 0 to 4*15	
+    variable wave_max_value : unsigned(5 downto 0);
+    variable wave_mid_value : unsigned(5 downto 0);
   begin
     if rising_edge(I_CLK) then
       if (I_ENA_4 = '1') then
-        base_sg_freq    <= "1111111" - r_base_sound(6 downto 0);
-        alto_sg_freq    <= "1111111" - r_alto_sound(6 downto 0);
-        soprano_sg_freq <= "1111111" - r_soprano_sound(6 downto 0);
-        noise_sg_freq   <= "1111111" - r_noise_sound(6 downto 0);
-        if audio_div_256 then
-          if (base_sg_cnt = "0000000") then
-            base_sg_cnt <= base_sg_freq(6 downto 0) - "1"; -- note wrap around for 0 case
-            base_sg <= not base_sg;
-          else
-            base_sg_cnt <= base_sg_cnt - "1";
-          end if;
-        end if;
-        if audio_div_128 then
-          if (alto_sg_cnt = "0000000") then
-            alto_sg_cnt <= alto_sg_freq(6 downto 0) - "1";
-            alto_sg <= not alto_sg;
-          else
-            alto_sg_cnt <= alto_sg_cnt - "1";
-          end if;
-        end if;
+        
+        -- base
         if audio_div_64 then
-          if (soprano_sg_cnt = "0000000") then
-            soprano_sg_cnt <= soprano_sg_freq(6 downto 0) - "1";
-            soprano_sg <= not soprano_sg;
+          if base_sg_cnt = "1111111" then
+            base_sg_cnt <= r_base_freq + "1";
+            base_sg_sreg <= base_sg_sreg(6 downto 0) & (not base_sg_sreg(7) and r_base_enabled);
           else
-            soprano_sg_cnt <= soprano_sg_cnt - "1";
+            base_sg_cnt <= base_sg_cnt + "1";
+          end if;
+        end if;        
+        base_sg <= base_sg_sreg(0);
+
+        -- alto
+        if audio_div_32 then
+          if alto_sg_cnt = "1111111" then
+            alto_sg_cnt <= r_alto_freq + "1";
+            alto_sg_sreg <= alto_sg_sreg(6 downto 0) & (not alto_sg_sreg(7) and r_alto_enabled);
+          else
+            alto_sg_cnt <= alto_sg_cnt + "1";
           end if;
         end if;
+        alto_sg <= alto_sg_sreg(0);
+        
+        -- soprano
+        if audio_div_16 then
+          if soprano_sg_cnt = "1111111" then
+            soprano_sg_cnt <= r_soprano_freq + "1";
+            soprano_sg_sreg <= soprano_sg_sreg(6 downto 0) & (not soprano_sg_sreg(7) and r_soprano_enabled);
+          else
+            soprano_sg_cnt <= soprano_sg_cnt + "1";
+          end if;
+        end if;
+        soprano_sg <= soprano_sg_sreg(0);
+        
         -- noise gen
         noise_zero := '0';
         if (noise_gen = "0000000000000000000") then
           noise_zero := '1';
         end if;
-        if audio_div_16 then
-          if (noise_sg_cnt = "0000000") then
-            noise_sg_cnt <= noise_sg_freq(6 downto 0) - "1";
-            noise_gen(18 downto 2) <= noise_gen(17 downto 1);
-            noise_gen(1)           <= noise_gen(0) xor noise_zero;
-            noise_gen(0)           <= noise_gen(0) xor noise_gen(1) xor
-                                      noise_gen(4) xor noise_gen(18);
-            noise_sg <= noise_gen(9);
-          else
-            noise_sg_cnt <= noise_sg_cnt - "1";
+        if audio_div_32 then
+          if r_noise_enabled='1' then  -- advance only when generator is enabled
+            if noise_sg_cnt = "1111111" then
+              noise_sg_cnt <= r_noise_freq + "1";
+              noise_gen(18 downto 2) <= noise_gen(17 downto 1);
+              noise_gen(1)           <= noise_gen(0) xor noise_zero;
+              noise_gen(0)           <= noise_gen(0) xor noise_gen(1) xor noise_gen(4) xor noise_gen(18);              
+            else
+              noise_sg_cnt <= noise_sg_cnt + "1";
+            end if;
+          end if;	 
+        end if;
+        noise_sg <= noise_gen(9);
+        
+        -- 'mixer'        
+        wave_max_value := unsigned("00"  & r_amplitude);             
+        wave_mid_value := unsigned("000" & r_amplitude(3 downto 1)); -- value when sound generator is muted 
+        a_sum := "000000";        
+        if r_base_enabled='1' then
+          if base_sg ='1' then 
+            a_sum := a_sum + wave_max_value; 
           end if;
+        else
+          a_sum := a_sum + wave_mid_value;  
+        end if;		  
+        if r_alto_enabled='1' then
+          if alto_sg='1' then
+            a_sum := a_sum + wave_max_value;
+          end if;
+        else
+          a_sum := a_sum + wave_mid_value;
+        end if;		  
+        if r_soprano_enabled='1' then 
+          if soprano_sg='1' then
+            a_sum := a_sum + wave_max_value;
+          end if;	
+        else
+          a_sum := a_sum + wave_mid_value;
         end if;
-        -- 'mixer'
-        a_sum := "000000";
-        if (r_base_sound(7) and base_sg)='1' then
-          a_sum := a_sum + unsigned("00"&r_amplitude);
-        end if;
-        if (r_alto_sound(7) and alto_sg)='1' then
-          a_sum := a_sum + unsigned("00"&r_amplitude);
-        end if;
-        if (r_soprano_sound(7) and soprano_sg)='1' then
-          a_sum := a_sum + unsigned("00"&r_amplitude);
-        end if;
-        if (r_noise_sound(7) and noise_sg)='1' then
-          a_sum := a_sum + unsigned("00"&r_amplitude);
-        end if;
+        if r_noise_enabled='1' then
+          if noise_sg='1' then
+            a_sum := a_sum + wave_max_value;
+          end if;	
+        else	 		    
+          if noise_sg='1' then                    
+            a_sum := a_sum + wave_max_value;  -- when muted the noise generator 
+          else                                -- outputs high if it's in the '1' state
+            a_sum := a_sum + wave_mid_value;       
+          end if;	
+        end if;		  
         O_AUDIO<=std_logic_vector(a_sum);
       end if;
     end if;
