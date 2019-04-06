@@ -421,7 +421,7 @@ begin
         elsif (hcnt = H_START_M1) then
           hblank <= '0';
         end if;
-        if do_hsync then
+        if do_hsync and vsync='0' then
           hsync <= '1';
         elsif (hcnt = "0000010011") then -- 20 -1
           hsync <= '0';
