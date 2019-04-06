@@ -514,7 +514,7 @@ wire  [5:0] osd_b_in;
 
 wire        vsync_out;
 wire        hsync_out;
-wire        csync_out = (HS_O == VS_O);
+wire        csync_out = ~(~HS_O | ~VS_O);
 
 // a minimig vga->scart cable expects a composite sync signal on the VGA_HS output.
 // and VCC on VGA_VS (to switch into rgb mode)
