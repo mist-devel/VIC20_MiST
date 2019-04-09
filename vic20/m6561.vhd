@@ -57,6 +57,8 @@
 
 -- A more accurate implementation of the three sound voices has been coded 
 -- according to the model theorized by Viznut/pwp at http://www.pelulamu.net/pwp/vic20/waveforms.txt 
+-- Noise was generator decoded by Lance Ewing from the 6561 die shot
+-- and found to be a 16-bit maximal length LFSR (with feedback bits 3,12,14 and 15)
 
 library ieee ;
   use ieee.std_logic_1164.all ;
@@ -253,7 +255,8 @@ architecture RTL of M6561 is
 
   signal noise_sg         : std_logic;
   signal noise_sg_cnt     : std_logic_vector(6 downto 0) := (others => '0');
-  signal noise_gen        : std_logic_vector(18 downto 0) := (others => '0');
+  signal noise_sg_sreg    : std_logic_vector(7 downto 0) := (others => '0');  
+  signal noise_LFSR       : std_logic_vector(15 downto 0) := (others => '0');
 
   signal audio_wav        : std_logic_vector(3 downto 0);
   signal audio_mul_out    : std_logic_vector(7 downto 0);
@@ -736,7 +739,7 @@ begin
       if (I_ENA_4 = '1') then
         audio_div <= audio_div + "1";
         -- /256 /4 (phi = clk4 /4) *2 as toggling output
-		  audio_div_64   <= audio_div(5 downto 0) =  "000000";
+        audio_div_64   <= audio_div(5 downto 0) =  "000000";
         audio_div_32   <= audio_div(4 downto 0) =   "00000";
         audio_div_16   <= audio_div(3 downto 0) =    "0000";
 		end if;
@@ -787,22 +790,24 @@ begin
         
         -- noise gen
         noise_zero := '0';
-        if (noise_gen = "0000000000000000000") then
+        if noise_LFSR = 0 then
           noise_zero := '1';
         end if;
+        
         if audio_div_32 then
           if r_noise_enabled='1' then  -- advance only when generator is enabled
             if noise_sg_cnt = "1111111" then
               noise_sg_cnt <= r_noise_freq + "1";
-              noise_gen(18 downto 2) <= noise_gen(17 downto 1);
-              noise_gen(1)           <= noise_gen(0) xor noise_zero;
-              noise_gen(0)           <= noise_gen(0) xor noise_gen(1) xor noise_gen(4) xor noise_gen(18);              
+              noise_sg_sreg <= noise_sg_sreg(6 downto 0) & (not noise_sg_sreg(7) and r_soprano_enabled);
+              noise_LFSR(15 downto 2) <= noise_LFSR(14 downto 1);
+              noise_LFSR(1)           <= noise_LFSR(0) xor noise_zero;
+              noise_LFSR(0)           <= noise_LFSR(3) xor noise_LFSR(12) xor noise_LFSR(14) xor noise_LFSR(15);              
             else
               noise_sg_cnt <= noise_sg_cnt + "1";
             end if;
           end if;	 
         end if;
-        noise_sg <= noise_gen(9);
+        noise_sg <= noise_sg_sreg(0) and noise_LFSR(0);
         
         -- 'mixer'        
         wave_max_value := unsigned("00"  & r_amplitude);             
