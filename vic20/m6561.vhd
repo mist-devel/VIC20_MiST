@@ -814,6 +814,7 @@ begin
         -- 'mixer'        
         wave_max_value := unsigned("00"  & r_amplitude);             
         wave_mid_value := unsigned("000" & r_amplitude(3 downto 1)); -- value when sound generator is muted 
+                
         a_sum := "000000";        
         if r_base_enabled='1' then
           if base_sg ='1' then 
@@ -838,13 +839,13 @@ begin
         end if;
         if r_noise_enabled='1' then
           if noise_sg='1' then
-            a_sum := a_sum + wave_max_value;
+            a_sum := a_sum + unsigned("000" & r_amplitude(3 downto 1)); --wave_max_value;
           end if;	
         else	 		    
           if noise_sg='1' then                    
-            a_sum := a_sum + wave_max_value;  -- when muted the noise generator 
+            a_sum := a_sum + unsigned("000" & r_amplitude(3 downto 1)); --wave_max_value;  -- when muted the noise generator 
           else                                -- outputs high if it's in the '1' state
-            a_sum := a_sum + wave_mid_value;       
+            a_sum := a_sum + unsigned("0000" & r_amplitude(3 downto 2)); -- wave_mid_value;       
           end if;	
         end if;		  
         O_AUDIO<=std_logic_vector(a_sum);
