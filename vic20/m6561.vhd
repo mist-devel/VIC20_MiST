@@ -794,7 +794,7 @@ begin
           noise_zero := '1';
         end if;
         
-        if audio_div_64 then
+        if audio_div_16 then
           if r_noise_enabled='1' then  -- advance only when generator is enabled
             if noise_sg_cnt = "1111111" then
               noise_sg_cnt <= r_noise_freq + "1";
@@ -807,7 +807,7 @@ begin
             end if;
           end if;	 
         end if;
-        noise_sg <= noise_sg_sreg(0) and noise_LFSR(0);
+        noise_sg <= noise_sg_sreg(0) xor noise_LFSR(0);
         
         -- 'mixer'        
         wave_max_value := unsigned("00"  & r_amplitude);             
