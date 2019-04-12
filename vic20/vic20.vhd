@@ -131,6 +131,10 @@ architecture RTL of VIC20 is
     -- 4k cartridge (otherwise 8k)
     constant cartridge_4k : boolean := true;
 
+    -- system clock for audio filters
+    constant sysclk_PAL  : integer := 35480000;
+    constant sysclk_NTSC : integer := 28630000;
+
     signal reset_l            : std_logic;
     signal ena_4              : std_logic;
     signal reset_l_sampled    : std_logic;
@@ -157,10 +161,14 @@ architecture RTL of VIC20 is
     signal ena_1mhz           : std_logic;
     signal via1_dout          : std_logic_vector( 7 downto 0);
     signal via2_dout          : std_logic_vector( 7 downto 0);
-
-    signal vic_audio          : std_logic_vector( 5 downto 0);
-    signal lp_output          : std_logic_vector(15 downto 0);
-    signal lp_filtered        : std_logic_vector(15 downto 0);
+		
+    signal vic_audio           : std_logic_vector( 5 downto 0);
+    signal PAL_lp_output       : std_logic_vector(15 downto 0);
+    signal PAL_lp_filtered     : std_logic_vector(15 downto 0);
+    signal PAL_audio_filtered  : std_logic_vector(15 downto 0);
+    signal NTSC_lp_output      : std_logic_vector(15 downto 0);
+    signal NTSC_lp_filtered    : std_logic_vector(15 downto 0);
+    signal NTSC_audio_filtered : std_logic_vector(15 downto 0);
 
     -- video system
     signal v_addr             : std_logic_vector(13 downto 0);
@@ -376,14 +384,21 @@ begin
       I_POTX          => '0',
       I_POTY          => '0'
       );
+	 
+	 -- audio filters
+	
+	 -- Filters are running at sysclk which is different in PAL/NTSC
+	 -- so we have to define two different banks of filters 	 
 
-   -- we use a well oversampled LP output...
-   intrinsic_RC_lp: entity work.rc_filter_1o
+	 -- we use a well oversampled LP output...
+	 
+	 -- PAL filters	 
+   intrinsic_RC_lp_PAL: entity work.rc_filter_1o
     generic map (
           highpass_g   => false,
           R_ohms_g     => 1000,    -- 1kOhms   \  LP from output
           C_p_farads_g => 10000,   -- 10 nF    /  with ~16kHz fg
-          fclk_hz_g => 8867236,    -- we use the sysclk
+          fclk_hz_g => sysclk_PAL,    -- we use the sysclk
           cwidth_g  => 12,
           dwidthi_g => 6,
           dwidtho_g => 16
@@ -393,15 +408,15 @@ begin
           clken_i => i_sysclk_en,
           res_i   => i_reset,
           din_i   => vic_audio,
-          dout_o  => lp_output
+          dout_o  => PAL_lp_output
         );
 
-   audio_RC_lp: entity work.rc_filter_1o
+   audio_RC_lp_PAL: entity work.rc_filter_1o
     generic map (
           highpass_g   => false,
           R_ohms_g     => 1000,    -- 1kOhms   \  LP on PCB
           C_p_farads_g => 100000,  -- 100 nF   /  with ~1.6kHz fg
-          fclk_hz_g => 8867236,    -- we use the sysclk
+          fclk_hz_g => sysclk_PAL,    -- we use the sysclk
           cwidth_g  => 14,
           dwidthi_g => 16,
           dwidtho_g => 16
@@ -410,16 +425,16 @@ begin
           clk_i   => i_sysclk,
           clken_i => i_sysclk_en,
           res_i   => i_reset,
-          din_i   => lp_output,
-          dout_o  => lp_filtered
+          din_i   => PAL_lp_output,
+          dout_o  => PAL_lp_filtered
         );
 
-   audio_RC_hp: entity work.rc_filter_1o
+   audio_RC_hp_PAL: entity work.rc_filter_1o
     generic map (
           highpass_g   => true,
           R_ohms_g     => 1000,      -- 1kOhms   \  HP to connector
           C_p_farads_g => 1000000,   -- 1 uF     /  with ~160Hz fg
-          fclk_hz_g => 8867236,      -- we use the sysclk
+          fclk_hz_g => sysclk_PAL,      -- we use the sysclk
           cwidth_g  => 16,
           dwidthi_g => 16,
           dwidtho_g => 16
@@ -428,10 +443,68 @@ begin
           clk_i   => i_sysclk,
           clken_i => i_sysclk_en,
           res_i   => i_reset,
-          din_i   => lp_filtered,
-          dout_o  => O_AUDIO
+          din_i   => PAL_lp_filtered,
+          dout_o  => PAL_audio_filtered
         );
 
+	 -- NTSC filters
+	 
+   intrinsic_RC_lp_NTSC: entity work.rc_filter_1o
+    generic map (
+          highpass_g   => false,
+          R_ohms_g     => 1000,    -- 1kOhms   \  LP from output
+          C_p_farads_g => 10000,   -- 10 nF    /  with ~16kHz fg
+          fclk_hz_g => sysclk_NTSC,    -- we use the sysclk
+          cwidth_g  => 12,
+          dwidthi_g => 6,
+          dwidtho_g => 16
+    )
+    port map (
+          clk_i   => i_sysclk,
+          clken_i => i_sysclk_en,
+          res_i   => i_reset,
+          din_i   => vic_audio,
+          dout_o  => NTSC_lp_output
+        );
+
+   audio_RC_lp_NTSC: entity work.rc_filter_1o
+    generic map (
+          highpass_g   => false,
+          R_ohms_g     => 1000,    -- 1kOhms   \  LP on PCB
+          C_p_farads_g => 100000,  -- 100 nF   /  with ~1.6kHz fg
+          fclk_hz_g => sysclk_NTSC,    -- we use the sysclk
+          cwidth_g  => 14,
+          dwidthi_g => 16,
+          dwidtho_g => 16
+    )
+    port map (
+          clk_i   => i_sysclk,
+          clken_i => i_sysclk_en,
+          res_i   => i_reset,
+          din_i   => NTSC_lp_output,
+          dout_o  => NTSC_lp_filtered
+        );
+
+   audio_RC_hp_NTSC: entity work.rc_filter_1o
+    generic map (
+          highpass_g   => true,
+          R_ohms_g     => 1000,      -- 1kOhms   \  HP to connector
+          C_p_farads_g => 1000000,   -- 1 uF     /  with ~160Hz fg
+          fclk_hz_g => sysclk_NTSC,      -- we use the sysclk
+          cwidth_g  => 16,
+          dwidthi_g => 16,
+          dwidtho_g => 16
+    )
+    port map (
+          clk_i   => i_sysclk,
+          clken_i => i_sysclk_en,
+          res_i   => i_reset,
+          din_i   => NTSC_lp_filtered,
+          dout_o  => NTSC_audio_filtered
+        );
+
+  O_AUDIO <= PAL_audio_filtered when i_pal='1' else NTSC_audio_filtered;  
+	
   via1 : entity work.M6522
     port map (
       CLK             => i_sysclk,
