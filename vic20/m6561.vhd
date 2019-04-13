@@ -240,6 +240,7 @@ architecture RTL of M6561 is
   signal audio_div_64     : boolean;
   signal audio_div_32     : boolean;
   signal audio_div_16     : boolean;
+  signal audio_div_8      : boolean;
 
   signal base_sg          : std_logic;
   signal base_sg_cnt      : std_logic_vector(6 downto 0) := (others => '0');
@@ -742,6 +743,7 @@ begin
         audio_div_64   <= audio_div(5 downto 0) =  "000000";
         audio_div_32   <= audio_div(4 downto 0) =   "00000";
         audio_div_16   <= audio_div(3 downto 0) =    "0000";
+        audio_div_8    <= audio_div(2 downto 0) =     "000";
 		end if;
     end if;
   end process;
@@ -793,8 +795,8 @@ begin
         if noise_LFSR = 0 then
           noise_zero := '1';
         end if;
-        
-        if audio_div_16 then          
+        -- noise gen        
+        if audio_div_8 then          
           if noise_sg_cnt = "1111111" then
             noise_sg_cnt <= r_noise_freq + "1";
             if noise_LFSR(0)='1' then 
