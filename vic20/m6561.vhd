@@ -5,10 +5,6 @@
 --
 -- POTX/Y not implemented
 -- light pen may not be correct
-
--- The noise generator is not 100% accurate. I am fairly sure it is a LFSR
--- of length 18 or 19, however I have not found the taps which reproduce the
--- waveform of a real device.
 -- 
 -- All rights reserved
 -- (c) copyright 2003-2009 by MikeJ (Mike Johnson)
@@ -57,6 +53,8 @@
 
 -- A more accurate implementation of the three sound voices has been coded 
 -- according to the model theorized by Viznut/pwp at http://www.pelulamu.net/pwp/vic20/waveforms.txt 
+-- The noise generator was implemented thanks to the work of Lance Ewing 
+-- who reverse engineered it from the 6561 die shot.
 
 library ieee ;
   use ieee.std_logic_1164.all ;
@@ -238,6 +236,7 @@ architecture RTL of M6561 is
   signal audio_div_64     : boolean;
   signal audio_div_32     : boolean;
   signal audio_div_16     : boolean;
+  signal audio_div_8      : boolean;
 
   signal base_sg          : std_logic;
   signal base_sg_cnt      : std_logic_vector(6 downto 0) := (others => '0');
@@ -253,7 +252,8 @@ architecture RTL of M6561 is
 
   signal noise_sg         : std_logic;
   signal noise_sg_cnt     : std_logic_vector(6 downto 0) := (others => '0');
-  signal noise_gen        : std_logic_vector(18 downto 0) := (others => '0');
+  signal noise_sg_sreg    : std_logic_vector(7 downto 0) := (others => '0');  
+  signal noise_LFSR       : std_logic_vector(15 downto 0) := (others => '0');
 
   signal audio_wav        : std_logic_vector(3 downto 0);
   signal audio_mul_out    : std_logic_vector(7 downto 0);
@@ -736,15 +736,15 @@ begin
       if (I_ENA_4 = '1') then
         audio_div <= audio_div + "1";
         -- /256 /4 (phi = clk4 /4) *2 as toggling output
-		  audio_div_64   <= audio_div(5 downto 0) =  "000000";
+        audio_div_64   <= audio_div(5 downto 0) =  "000000";
         audio_div_32   <= audio_div(4 downto 0) =   "00000";
         audio_div_16   <= audio_div(3 downto 0) =    "0000";
+        audio_div_8    <= audio_div(2 downto 0) =     "000";
 		end if;
     end if;
   end process;
 
-  p_sound_gen : process (I_CLK) is
-    variable noise_zero : std_ulogic;
+  p_sound_gen : process (I_CLK) is    
     variable a_sum : unsigned(5 downto 0); -- sum is 0 to 4*15	
     variable wave_max_value : unsigned(5 downto 0);
     variable wave_mid_value : unsigned(5 downto 0);
@@ -785,28 +785,25 @@ begin
         end if;
         soprano_sg <= soprano_sg_sreg(0);
         
-        -- noise gen
-        noise_zero := '0';
-        if (noise_gen = "0000000000000000000") then
-          noise_zero := '1';
+        -- noise gen        
+        if audio_div_8 then          
+          if noise_sg_cnt = "1111111" then
+            noise_sg_cnt <= r_noise_freq + "1";
+            if noise_LFSR(0)='1' then 
+              noise_sg_sreg <= noise_sg_sreg(6 downto 0) & (not noise_sg_sreg(7) and r_noise_enabled);
+            end if;              
+            noise_LFSR(15 downto 1) <= noise_LFSR(14 downto 0);            
+            noise_LFSR(0)           <= ((noise_LFSR(3) xor noise_LFSR(12)) xnor (noise_LFSR(14) xor noise_LFSR(15))) nand r_noise_enabled;              
+          else
+            noise_sg_cnt <= noise_sg_cnt + "1";
+          end if;          
         end if;
-        if audio_div_32 then
-          if r_noise_enabled='1' then  -- advance only when generator is enabled
-            if noise_sg_cnt = "1111111" then
-              noise_sg_cnt <= r_noise_freq + "1";
-              noise_gen(18 downto 2) <= noise_gen(17 downto 1);
-              noise_gen(1)           <= noise_gen(0) xor noise_zero;
-              noise_gen(0)           <= noise_gen(0) xor noise_gen(1) xor noise_gen(4) xor noise_gen(18);              
-            else
-              noise_sg_cnt <= noise_sg_cnt + "1";
-            end if;
-          end if;	 
-        end if;
-        noise_sg <= noise_gen(9);
+        noise_sg <= noise_sg_sreg(0);
         
         -- 'mixer'        
         wave_max_value := unsigned("00"  & r_amplitude);             
         wave_mid_value := unsigned("000" & r_amplitude(3 downto 1)); -- value when sound generator is muted 
+                
         a_sum := "000000";        
         if r_base_enabled='1' then
           if base_sg ='1' then 
