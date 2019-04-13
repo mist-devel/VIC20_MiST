@@ -832,13 +832,13 @@ begin
         end if;
         if r_noise_enabled='1' then
           if noise_sg='1' then
-            a_sum := a_sum + unsigned("000" & r_amplitude(3 downto 1)); --wave_max_value;
+            a_sum := a_sum + wave_max_value;
           end if;	
         else	 		    
           if noise_sg='1' then                    
-            a_sum := a_sum + unsigned("000" & r_amplitude(3 downto 1)); --wave_max_value;  -- when muted the noise generator 
+            a_sum := a_sum + wave_max_value;  -- when muted the noise generator 
           else                                -- outputs high if it's in the '1' state
-            a_sum := a_sum + unsigned("0000" & r_amplitude(3 downto 2)); -- wave_mid_value;       
+            a_sum := a_sum + wave_mid_value;       
           end if;	
         end if;		  
         O_AUDIO<=std_logic_vector(a_sum);
