@@ -5,10 +5,6 @@
 --
 -- POTX/Y not implemented
 -- light pen may not be correct
-
--- The noise generator is not 100% accurate. I am fairly sure it is a LFSR
--- of length 18 or 19, however I have not found the taps which reproduce the
--- waveform of a real device.
 -- 
 -- All rights reserved
 -- (c) copyright 2003-2009 by MikeJ (Mike Johnson)
@@ -57,8 +53,8 @@
 
 -- A more accurate implementation of the three sound voices has been coded 
 -- according to the model theorized by Viznut/pwp at http://www.pelulamu.net/pwp/vic20/waveforms.txt 
--- Noise was generator decoded by Lance Ewing from the 6561 die shot
--- and found to be a 16-bit maximal length LFSR (with feedback bits 3,12,14 and 15)
+-- The noise generator was implemented thanks to the work of Lance Ewing 
+-- who reverse engineered it from the 6561 die shot.
 
 library ieee ;
   use ieee.std_logic_1164.all ;
