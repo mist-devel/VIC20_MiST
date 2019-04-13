@@ -361,7 +361,8 @@ vic20 VIC20
 );
 
 //////////////////   MEMORY   //////////////////
-assign SDRAM_CLK = ~clk_sys;
+assign SDRAM_CLK = clk_sys;
+
 wire  [7:0] sdram_in;
 wire  [7:0] sdram_out;
 wire [15:0] sdram_a;
