@@ -748,8 +748,7 @@ begin
     end if;
   end process;
 
-  p_sound_gen : process (I_CLK) is
-    variable noise_zero : std_ulogic;
+  p_sound_gen : process (I_CLK) is    
     variable a_sum : unsigned(5 downto 0); -- sum is 0 to 4*15	
     variable wave_max_value : unsigned(5 downto 0);
     variable wave_mid_value : unsigned(5 downto 0);
@@ -790,11 +789,6 @@ begin
         end if;
         soprano_sg <= soprano_sg_sreg(0);
         
-        -- noise gen
-        noise_zero := '0';
-        if noise_LFSR = 0 then
-          noise_zero := '1';
-        end if;
         -- noise gen        
         if audio_div_8 then          
           if noise_sg_cnt = "1111111" then
