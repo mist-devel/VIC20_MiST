@@ -49,7 +49,6 @@ module sdram
 );
 
 assign SDRAM_CKE = ~init;
-assign dout = oe ? ram_dout : 8'hFF;
 
 // no burst configured
 localparam RASCAS_DELAY   = 3'd3;   // tRCD=20ns -> 3 cycles@128MHz
@@ -77,7 +76,6 @@ always @(posedge clk) begin
     reg [22:0] old_addr;
     reg old_rd, old_we, old_ref;
 
-    i<=SDRAM_DQ;
     old_ref<=clkref;
 
     if(q==STATE_IDLE) begin
@@ -131,7 +129,8 @@ localparam CMD_PRECHARGE       = 4'b0010;
 localparam CMD_AUTO_REFRESH    = 4'b0001;
 localparam CMD_LOAD_MODE       = 4'b0000;
 
-reg [7:0] ram_dout;
+wire [7:0] ram_dout = a[0] ? i[15:8] : i[7:0];
+assign dout = oe ? ram_dout : 8'hFF;
 
 // SDRAM state machines
 always @(posedge clk) begin
@@ -163,11 +162,11 @@ always @(posedge clk) begin
 		SDRAM_BA <= (mode == MODE_NORMAL) ? bank : 2'b00;
 		SDRAM_DQ <= wr ? {din, din} : 16'bZZZZZZZZZZZZZZZZ;
 		{SDRAM_DQMH,SDRAM_DQML} <= {~a[0] & wr,a[0] & wr};
-		if(wr) ram_dout <= din;
+		if(wr) SDRAM_DQ <= { din, din };
 	end
 
 	if (q == STATE_CONT+CAS_LATENCY+1) begin
-		if (~wr & ram_req) ram_dout <= a[0] ? i[15:8] : i[7:0];
+		if (~wr & ram_req) i <= SDRAM_DQ;
 	end
 end
 
