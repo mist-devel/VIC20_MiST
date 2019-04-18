@@ -106,7 +106,7 @@ always@(posedge sck, posedge ss) begin
 
 		// expose file (menu) index
 		if((cmd == UIO_FILE_INDEX) && (cnt == 15))
-			index <= {sbuf[3:0], sdi};
+			index <= {sbuf[6:0], sdi};
 	end
 end
 

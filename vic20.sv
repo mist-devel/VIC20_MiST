@@ -65,6 +65,7 @@ assign LED = ~ioctl_download & ~led_disk;
 localparam CONF_STR =
 {
     "VIC20;PRGCRT;",
+//    "VIC20;PRGCRTTAP;",
     "S,D64,Mount Disk;",
     "O3,Video,PAL,NTSC;",
     "O2,CRT with load address,Yes,No;",
@@ -356,7 +357,7 @@ vic20 VIC20
 
     // -- ROM setup bus
     .CONF_WR(ioctl_internal_memory_wr & ioctl_ram_wr),
-    .CONF_AI(ioctl_target_addr),
+    .CONF_AI(ioctl_target_addr[15:0]),
     .CONF_DI(ioctl_reg_inject_state ? ioctl_reg_data : ioctl_dout)
 );
 
@@ -374,28 +375,30 @@ wire        p2_h;
 sdram ram
 (
     .*,
-    .clkref(ioctl_download ? clk_ref : p2_h),
+    .clkref(ioctl_download ? ioctl_wr : p2_h),
     .init(~pll_locked),
     .clk(clk_sys),
     .bank(2'b00),
     .dout(sdram_out),
-    .din (prg_download ? ioctl_dout : sdram_in),
-    .addr(prg_download ? ioctl_target_addr : {9'b0, cart_unload ? 16'ha004 : sdram_a[15:0]}),
-    .we((sdram_en & ~sdram_wr_n) || (prg_download && !ioctl_internal_memory_wr && ioctl_ram_wr) || cart_unload),
+    .din ((prg_download | tap_download) ? ioctl_dout : sdram_in),
+    .addr((prg_download | tap_download) ? ioctl_target_addr : {9'b0, cart_unload ? 16'ha004 : sdram_a[15:0]}),
+    .we((sdram_en & ~sdram_wr_n) || (prg_download && !ioctl_internal_memory_wr && ioctl_ram_wr) || (tap_download && ioctl_ram_wr) || cart_unload),
     .oe(sdram_en & sdram_wr_n)
 );
 
-//////////////////  PRG/ROM LOAD //////////////
+//////////////////  PRG/ROM/TAP LOAD //////////////
 wire        ioctl_wr;
 wire        ioctl_ram_wr;
-wire [15:0] ioctl_addr;
+wire [24:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
 wire        rom_download = ioctl_download && !ioctl_index;
-wire        prg_download = ioctl_download && ioctl_index;
+wire        prg_download = ioctl_download && (ioctl_index == 8'h01 || ioctl_index == 8'h41);
+wire        tap_download = ioctl_download && ioctl_index == 8'h81;
 reg   [4:0] ioctl_reg_inject_state = 0;
-wire [15:0] ioctl_target_addr;
+wire [22:0] ioctl_target_addr;
+reg  [22:0] ioctl_tap_addr;
 reg  [15:0] ioctl_prg_addr;
 reg  [15:0] ioctl_reg_addr;
 reg         ioctl_reg_wr;
@@ -417,28 +420,29 @@ data_io data_io (
 );
 
 always_comb begin
-    casex ({rom_download, ioctl_addr[15:13]})
-        'b1_00X: ioctl_target_addr = {2'b00, ioctl_addr[13:0]}; //1541
-        'b1_010: ioctl_target_addr = {3'b111, ioctl_addr[12:0]}; //kernal pal
-        'b1_011: ioctl_target_addr = {3'b111, ioctl_addr[12:0]}; //kernal ntsc
-        'b1_100: ioctl_target_addr = {3'b110, ioctl_addr[12:0]}; //basic
-        'b1_101: ioctl_target_addr = {4'b1000, ioctl_addr[11:0]}; //character
-        'b0_XXX: ioctl_target_addr = ioctl_reg_inject_state ? ioctl_reg_addr : ioctl_prg_addr;
+    casex ({tap_download, rom_download, ioctl_addr[15:13]})
+        'bX1_00X: ioctl_target_addr = {7'h0, 2'b00, ioctl_addr[13:0]}; //1541
+        'bX1_010: ioctl_target_addr = {7'h0, 3'b111, ioctl_addr[12:0]}; //kernal pal
+        'bX1_011: ioctl_target_addr = {7'h0, 3'b111, ioctl_addr[12:0]}; //kernal ntsc
+        'bX1_100: ioctl_target_addr = {7'h0, 3'b110, ioctl_addr[12:0]}; //basic
+        'bX1_101: ioctl_target_addr = {7'h0, 4'b1000, ioctl_addr[11:0]}; //character
+        'bX0_XXX: ioctl_target_addr = {7'h0, ioctl_reg_inject_state ? {7'h0, ioctl_reg_addr} : ioctl_prg_addr};
+		  'b1X_XXX: ioctl_target_addr = ioctl_tap_addr;
         default: ioctl_target_addr = 0;
     endcase;
 end
 
 wire ioctl_internal_memory_wr = 
     (rom_download && ioctl_target_addr[15:14]) ||
-    (!rom_download && (ioctl_target_addr[15:10] == 6'b000000 ||
-                       ioctl_target_addr[15:11] == 5'b00010 ||
-                       ioctl_target_addr[15:11] == 5'b00011 ||
-                       ioctl_target_addr[15:10] == 6'b100101));
+    (prg_download && (ioctl_target_addr[15:10] == 6'b000000 ||
+                      ioctl_target_addr[15:11] == 5'b00010 ||
+                      ioctl_target_addr[15:11] == 5'b00011 ||
+                      ioctl_target_addr[15:10] == 6'b100101));
 
-always @(negedge clk_sys) begin
+always @(posedge clk_sys) begin
     reg old_prg_download;
     reg auto_reset;
-    
+
     force_reset <= 0;
     old_prg_download <= prg_download;
     ioctl_ram_wr <= 0;
@@ -455,8 +459,12 @@ always @(negedge clk_sys) begin
         end
         if (ioctl_prg_addr == 16'ha000) auto_reset <= 1;
     end
+    if (tap_download && ioctl_wr) begin
+        ioctl_tap_addr <= ioctl_addr ? ioctl_tap_addr + 1'd1 : 22'h20000; //load tap to 20000
+        ioctl_ram_wr <= 1;
+    end
     if (rom_download) ioctl_ram_wr <= ioctl_wr;
-    
+
     //prg download ended, adjust registers
     if (old_prg_download & ~prg_download) ioctl_reg_inject_state <= 1;
     
