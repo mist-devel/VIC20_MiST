@@ -79,7 +79,6 @@ localparam CONF_STR =
 
 
 ////////////////////   CLOCKS   ///////////////////
-wire ntsc = status[3];
 wire clk_sys;
 wire clk_32;
 wire clk_1541 = clk_32;
@@ -125,7 +124,7 @@ rom_reconfig_ntsc rom_reconfig_ntsc
     .q(q_reconfig_ntsc)
 );
 
-assign pll_rom_q = ntsc ? q_reconfig_ntsc : q_reconfig_pal;
+assign pll_rom_q = st_ntsc ? q_reconfig_ntsc : q_reconfig_pal;
 
 pll_reconfig pll_reconfig_inst
 (
@@ -172,7 +171,7 @@ always @(posedge clk_32) begin
     reg [1:0] pll_reconfig_state = 0;
     reg [9:0] pll_reconfig_timeout;
 
-    ntsc_d <= ntsc;
+    ntsc_d <= st_ntsc;
     ntsc_d2 <= ntsc_d;
     pll_write_from_rom <= 0;
     pll_reconfig <= 0;
@@ -220,9 +219,9 @@ always @(posedge clk_sys) begin
     clk_ref <= !sys_count;
     sys_count <= sys_count + 1'd1;
     
-    reset <= status[0] | status[1] | buttons[1] | force_reset | ~pll_locked;
+    reset <= st_reset | st_cart_unload | buttons[1] | force_reset | ~pll_locked;
     cart_unload <= 0;
-    if (status[1] | buttons[1]) cart_unload <= 1;
+    if (st_cart_unload | buttons[1]) cart_unload <= 1;
     c1541_reset <= reset;
 end
 
@@ -236,7 +235,17 @@ wire  [1:0] buttons;
 wire  [1:0] switches;
 wire        scandoubler_disable;
 wire        ypbpr;
+
+// status word wires (9 is unused)
 wire [31:0] status;
+wire        st_reset               = status[0];
+wire        st_cart_unload         = status[1];
+wire        st_crt_no_load_address = status[2];
+wire        st_ntsc                = status[3];
+wire  [1:0] st_ram_expansion       = status[5:4];
+wire        st_3k_expansion        = status[6];
+wire  [1:0] st_8k_rom              = status[8:7];
+wire  [1:0] st_scanlines           = status[11:10];
 
 wire [31:0] sd_lba;
 wire        sd_rd;
@@ -317,7 +326,7 @@ vic20 VIC20
     .I_SYSCLK(clk_sys),
     .I_SYSCLK_EN(clk8m & ~ioctl_download),
     .I_RESET(reset),
-    .I_PAL(~ntsc),
+    .I_PAL(~st_ntsc),
 
     .I_JOY(~{vic20_joy[0],vic20_joy[1],vic20_joy[2],vic20_joy[3]}),
     .I_FIRE(~vic20_joy[4]),
@@ -340,9 +349,9 @@ vic20 VIC20
     .I_ROW_OUT(row_out),
     .I_RESTORE_OUT(restore_key),
 
-    .I_CART_EN(|status[8:7]),  // at $A000(8k)
-    .I_CART_RO(status[8:7] != 2'd2),
-    .I_RAM_EXT({&status[5:4], status[5], |status[5:4], status[6]}), //at $6000(8k),$4000(8k),$2000(8k),$0400(3k)
+    .I_CART_EN(|st_8k_rom),  // at $A000(8k)
+    .I_CART_RO(st_8k_rom != 2'd2),
+    .I_RAM_EXT({&st_ram_expansion, st_ram_expansion[1], |st_ram_expansion, st_3k_expansion}), //at $6000(8k),$4000(8k),$2000(8k),$0400(3k)
 
     .O_AUDIO(vic_audio),
 
@@ -443,7 +452,7 @@ always @(negedge clk_sys) begin
     old_prg_download <= prg_download;
     ioctl_ram_wr <= 0;
     if (prg_download && ioctl_wr) begin
-        if (~status[2]) begin //cart/prg loading with address in the first 2 bytes
+        if (~st_crt_no_load_address) begin //cart/prg loading with address in the first 2 bytes
             if (ioctl_addr == 16'h0000) ioctl_prg_addr[7:0] <= ioctl_dout; else
             if (ioctl_addr == 16'h0001) ioctl_prg_addr[15:8] <= ioctl_dout; else begin
                 ioctl_ram_wr <= 1;
@@ -525,7 +534,7 @@ assign      VGA_VS = (scandoubler_disable || ypbpr)? 1'b1 : SD_VS_O;
 scandoubler scandoubler
 (
     .clk_sys(clk_sys),
-    .scanlines(status[11:10]),
+    .scanlines(st_scanlines),
     .hs_in(HS_O),
     .vs_in(VS_O),
     .r_in(R_O),
