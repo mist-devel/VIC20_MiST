@@ -176,11 +176,11 @@ architecture RTL of M6561 is
   signal r_char_mem       : std_logic_vector(3 downto 0) := "0000";
   signal r_x_lightpen     : std_logic_vector(7 downto 0) := "00000000";
   signal r_y_lightpen     : std_logic_vector(7 downto 0) := "00000000";
-  signal r_base_freq      : std_logic_vector(6 downto 0) := "0000000";
+  signal r_bass_freq      : std_logic_vector(6 downto 0) := "0000000";
   signal r_alto_freq      : std_logic_vector(6 downto 0) := "0000000";
   signal r_soprano_freq   : std_logic_vector(6 downto 0) := "0000000";
   signal r_noise_freq     : std_logic_vector(6 downto 0) := "0000000";
-  signal r_base_enabled   : std_logic := '0';
+  signal r_bass_enabled   : std_logic := '0';
   signal r_alto_enabled   : std_logic := '0';
   signal r_soprano_enabled: std_logic := '0';
   signal r_noise_enabled  : std_logic := '0';
@@ -238,9 +238,9 @@ architecture RTL of M6561 is
   signal audio_div_16     : boolean;
   signal audio_div_8      : boolean;
 
-  signal base_sg          : std_logic;
-  signal base_sg_cnt      : std_logic_vector(6 downto 0) := (others => '0');
-  signal base_sg_sreg     : std_logic_vector(7 downto 0) := (others => '0');
+  signal bass_sg          : std_logic;
+  signal bass_sg_cnt      : std_logic_vector(6 downto 0) := (others => '0');
+  signal bass_sg_sreg     : std_logic_vector(7 downto 0) := (others => '0');
 
   signal alto_sg          : std_logic;
   signal alto_sg_cnt      : std_logic_vector(6 downto 0) := (others => '0');
@@ -290,11 +290,11 @@ begin
       r_charsize       <= '0';
       r_screen_mem     <= "11111";
       r_char_mem       <= "0000";
-      r_base_freq      <= "0000000";
+      r_bass_freq      <= "0000000";
       r_alto_freq      <= "0000000";
       r_soprano_freq   <= "0000000";
       r_noise_freq     <= "0000000";
-      r_base_enabled   <= '0';
+      r_bass_enabled   <= '0';
       r_alto_enabled   <= '0';
       r_soprano_enabled<= '0';
       r_noise_enabled  <= '0';
@@ -322,8 +322,8 @@ begin
             when x"5" => r_screen_mem(4 downto 1) <= I_DATA(7 downto 4);
                          r_char_mem(3 downto 0)   <= I_DATA(3 downto 0);
 
-            when x"A" => r_base_enabled           <= I_DATA(7);
-                         r_base_freq              <= I_DATA(6 downto 0);
+            when x"A" => r_bass_enabled           <= I_DATA(7);
+                         r_bass_freq              <= I_DATA(6 downto 0);
                          
             when x"B" => r_alto_enabled           <= I_DATA(7);
                          r_alto_freq              <= I_DATA(6 downto 0);
@@ -375,8 +375,8 @@ begin
           when x"8" => O_DATA(7 downto 0)     <= x"00"; -- pot x
           when x"9" => O_DATA(7 downto 0)     <= x"00"; -- pot y
 
-          when x"A" => O_DATA(7)              <= r_base_enabled; 
-                       O_DATA(6 downto 0)     <= r_base_freq;
+          when x"A" => O_DATA(7)              <= r_bass_enabled; 
+                       O_DATA(6 downto 0)     <= r_bass_freq;
                        
           when x"B" => O_DATA(7)              <= r_alto_enabled; 
                        O_DATA(6 downto 0)     <= r_alto_freq;
@@ -728,19 +728,20 @@ begin
   --
   p_sound_div : process (I_CLK) is
   begin
-    -- bass       freq f=Phi2/256/(128-(($900a+1)&127))
-    -- alto       freq f=Phi2/128/(128-(($900b+1)&127))
-    -- soprano    freq f=Phi2/64/(128-(($900c+1) &127))
-    -- noise      freq f=Phi2/32/(128-(($900d+1) &127)) -- not true about the divider !
+	  -- clkfreq = 4435000 Hz PAL or 4090000 Hz NTSC
+    -- bass    freq f = clkfreq/64/16/(128-(($900a+1)&127))
+    -- alto    freq f = clkfreq/32/16/(128-(($900b+1)&127))
+    -- soprano freq f = clkfreq/16/16/(128-(($900c+1)&127))
+    -- noise   freq f = clkfreq/ 8/16/(128-(($900d+1)&127))
+    -- the 6561 has also a /128 clock divider, but it's not connected anywhere
     if rising_edge(I_CLK) then
       if (I_ENA_4 = '1') then
-        audio_div <= audio_div + "1";
-        -- /256 /4 (phi = clk4 /4) *2 as toggling output
-        audio_div_64   <= audio_div(5 downto 0) =  "000000";
-        audio_div_32   <= audio_div(4 downto 0) =   "00000";
-        audio_div_16   <= audio_div(3 downto 0) =    "0000";
-        audio_div_8    <= audio_div(2 downto 0) =     "000";
-		end if;
+        audio_div <= audio_div + "1";        
+        audio_div_64 <= audio_div(5 downto 0) = "000000";
+        audio_div_32 <= audio_div(4 downto 0) =  "00000";
+        audio_div_16 <= audio_div(3 downto 0) =   "0000";
+        audio_div_8  <= audio_div(2 downto 0) =    "000";
+		  end if;
     end if;
   end process;
 
@@ -752,16 +753,16 @@ begin
     if rising_edge(I_CLK) then
       if (I_ENA_4 = '1') then
         
-        -- base
+        -- bass
         if audio_div_64 then
-          if base_sg_cnt = "1111111" then
-            base_sg_cnt <= r_base_freq + "1";
-            base_sg_sreg <= base_sg_sreg(6 downto 0) & (not base_sg_sreg(7) and r_base_enabled);
+          if bass_sg_cnt = "1111111" then
+            bass_sg_cnt <= r_bass_freq + "1";
+            bass_sg_sreg <= bass_sg_sreg(6 downto 0) & (not bass_sg_sreg(7) and r_bass_enabled);
           else
-            base_sg_cnt <= base_sg_cnt + "1";
+            bass_sg_cnt <= bass_sg_cnt + "1";
           end if;
         end if;        
-        base_sg <= base_sg_sreg(0);
+        bass_sg <= bass_sg_sreg(0);
 
         -- alto
         if audio_div_32 then
@@ -805,8 +806,8 @@ begin
         wave_mid_value := unsigned("000" & r_amplitude(3 downto 1)); -- value when sound generator is muted 
                 
         a_sum := "000000";        
-        if r_base_enabled='1' then
-          if base_sg ='1' then 
+        if r_bass_enabled='1' then
+          if bass_sg ='1' then 
             a_sum := a_sum + wave_max_value; 
           end if;
         else
