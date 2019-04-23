@@ -73,6 +73,7 @@ localparam CONF_STR =
     "O45,Enable 8K+ Expansion,Off,8K,16K,24K;",
     "O6,Enable 3K Expansion,Off,On;",
     "O78,Enable 8k ROM,Off,RO,RW;",
+	 "O9,Audio filter,On,Off;",
     "T0,Reset;",
     "T1,Reset with cart unload;",
     "V,v1.0.",`BUILD_DATE
@@ -246,6 +247,7 @@ wire        st_ntsc                = status[3];
 wire  [1:0] st_ram_expansion       = status[5:4];
 wire        st_3k_expansion        = status[6];
 wire  [1:0] st_8k_rom              = status[8:7];
+wire        st_audio_filter_off    = status[9];
 wire  [1:0] st_scanlines           = status[11:10];
 
 wire [31:0] sd_lba;
@@ -355,6 +357,7 @@ vic20 VIC20
     .I_RAM_EXT({&st_ram_expansion, st_ram_expansion[1], |st_ram_expansion, st_3k_expansion}), //at $6000(8k),$4000(8k),$2000(8k),$0400(3k)
 
     .O_AUDIO(vic_audio),
+	 .i_audio_filter_off(st_audio_filter_off),
 
     .o_extmem_sel(sdram_en),
     .o_extmem_r_wn(sdram_wr_n),

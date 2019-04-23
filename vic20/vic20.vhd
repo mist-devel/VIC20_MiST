@@ -91,6 +91,8 @@ entity VIC20 is
     i_restore_out         : in    std_logic;                    -- take care, positive logic (1=>pressed)
 	 --
     o_audio               : out   std_logic_vector(15 downto 0); -- runs at SYSCLK/SYSCLK_EN rate
+	 i_audio_filter_off    : in    std_logic;
+	 
     -- back to system DRAM controller for external memory and cartridges, just map 1:1 to VIC memory
     o_extmem_sel          : out   std_logic;
     o_extmem_r_wn         : out   std_logic;
@@ -503,7 +505,7 @@ begin
           dout_o  => NTSC_audio_filtered
         );
 
-  O_AUDIO <= PAL_audio_filtered when i_pal='1' else NTSC_audio_filtered;  
+  O_AUDIO <= vic_audio & "0000000000" when i_audio_filter_off = '1' else PAL_audio_filtered when i_pal='1' else NTSC_audio_filtered;  
 	
   via1 : entity work.M6522
     port map (
