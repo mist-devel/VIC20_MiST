@@ -1,7 +1,7 @@
 //============================================================================
 // 
 //  VIC20 replica for MiST
-//  Copyright (C) 2018 GyÃ¶rgy Szombathelyi
+//  Copyright (C) 2018 György Szombathelyi
 //
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
@@ -73,6 +73,7 @@ localparam CONF_STR =
     "O45,Enable 8K+ Expansion,Off,8K,16K,24K;",
     "O6,Enable 3K Expansion,Off,On;",
     "O78,Enable 8k ROM,Off,RO,RW;",
+    "O9,Audio Filter,On,Off;",
     "T0,Reset;",
     "T1,Reset with cart unload;",
     "V,v1.0.",`BUILD_DATE
@@ -246,6 +247,7 @@ wire        st_ntsc                = status[3];
 wire  [1:0] st_ram_expansion       = status[5:4];
 wire        st_3k_expansion        = status[6];
 wire  [1:0] st_8k_rom              = status[8:7];
+wire        st_audio_filter        = ~status[9];
 wire  [1:0] st_scanlines           = status[11:10];
 
 wire [31:0] sd_lba;
@@ -355,6 +357,7 @@ vic20 VIC20
     .I_RAM_EXT({&st_ram_expansion, st_ram_expansion[1], |st_ram_expansion, st_3k_expansion}), //at $6000(8k),$4000(8k),$2000(8k),$0400(3k)
 
     .O_AUDIO(vic_audio),
+    .O_AUDIO_FILTERED(vic_audio_filtered),
 
     .o_extmem_sel(sdram_en),
     .o_extmem_r_wn(sdram_wr_n),
@@ -494,13 +497,13 @@ end
 
 //////////////////   AUDIO   //////////////////
 
-wire [15:0] vic_audio;
+wire [15:0] vic_audio, vic_audio_filtered;
 
 sigma_delta_dac #(15) dac_l
 (
     .CLK(clk_sys),
     .RESET(reset),
-    .DACin({1'b0, vic_audio[15:1]}),
+    .DACin(st_audio_filter ? vic_audio_filtered : vic_audio),
     .DACout(AUDIO_L)
 );
 
@@ -508,7 +511,7 @@ sigma_delta_dac #(15) dac_r
 (
     .CLK(clk_sys),
     .RESET(reset),
-    .DACin({1'b0, vic_audio[15:1]}),
+    .DACin(st_audio_filter ? vic_audio_filtered : vic_audio),
     .DACout(AUDIO_R)
 );
 //////////////////   VIDEO   //////////////////

@@ -91,6 +91,7 @@ entity VIC20 is
     i_restore_out         : in    std_logic;                    -- take care, positive logic (1=>pressed)
 	 --
     o_audio               : out   std_logic_vector(15 downto 0); -- runs at SYSCLK/SYSCLK_EN rate
+    o_audio_filtered      : out   std_logic_vector(15 downto 0);
     -- back to system DRAM controller for external memory and cartridges, just map 1:1 to VIC memory
     o_extmem_sel          : out   std_logic;
     o_extmem_r_wn         : out   std_logic;
@@ -169,6 +170,7 @@ architecture RTL of VIC20 is
     signal NTSC_lp_output      : std_logic_vector(15 downto 0);
     signal NTSC_lp_filtered    : std_logic_vector(15 downto 0);
     signal NTSC_audio_filtered : std_logic_vector(15 downto 0);
+    signal audio_filtered_signed : std_logic_vector(15 downto 0);
 
     -- video system
     signal v_addr             : std_logic_vector(13 downto 0);
@@ -503,8 +505,10 @@ begin
           dout_o  => NTSC_audio_filtered
         );
 
-  O_AUDIO <= PAL_audio_filtered when i_pal='1' else NTSC_audio_filtered;  
-	
+  audio_filtered_signed <= PAL_audio_filtered when i_pal='1' else NTSC_audio_filtered;
+  O_AUDIO_FILTERED <= audio_filtered_signed + 32768;
+  O_AUDIO          <= "0" & vic_audio & "000000000";
+
   via1 : entity work.M6522
     port map (
       CLK             => i_sysclk,
