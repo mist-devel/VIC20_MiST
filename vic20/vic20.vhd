@@ -505,7 +505,7 @@ begin
           dout_o  => NTSC_audio_filtered
         );
 
-  O_AUDIO <= vic_audio & "0000000000" when i_audio_filter_off = '1' else PAL_audio_filtered when i_pal='1' else NTSC_audio_filtered;  
+  O_AUDIO <= vic_audio & "0000000000" when i_audio_filter_off = '1' else PAL_lp_filtered when i_pal='1' else NTSC_lp_filtered;  
 	
   via1 : entity work.M6522
     port map (
