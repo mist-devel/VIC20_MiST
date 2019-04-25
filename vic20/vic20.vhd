@@ -90,6 +90,11 @@ entity VIC20 is
     i_row_out             : in    std_logic_vector(7 downto 0); -- take care, positive logic (1=>pressed)
     i_restore_out         : in    std_logic;                    -- take care, positive logic (1=>pressed)
 	 --
+    o_cass_write          : out   std_logic;
+    i_cass_read           : in    std_logic;
+    o_cass_motor          : out   std_logic;
+    i_cass_sense          : in    std_logic;
+     --
     o_audio               : out   std_logic_vector(15 downto 0); -- runs at SYSCLK/SYSCLK_EN rate
     o_audio_filtered      : out   std_logic_vector(15 downto 0);
     -- back to system DRAM controller for external memory and cartridges, just map 1:1 to VIC memory
@@ -280,10 +285,10 @@ begin
   -- <= user_port_out_oe_l
 
   -- tape
-  cass_read <= '0';
-  --<= cass_write;
-  --<= cass_motor
-  cass_sw <= '1'; -- sense casette buttons
+  O_CASS_WRITE <= cass_write;
+  cass_read    <= I_CASS_READ;
+  O_CASS_MOTOR <= cass_motor;
+  cass_sw      <= I_CASS_SENSE;
 
   -- serial
 --  serial_srq_in <= '1';

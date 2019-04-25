@@ -92,7 +92,11 @@ always @(posedge clk) begin
     end
 
     q <= q + 3'd1;
-    if(~old_ref & clkref) q <= 0;
+    if(old_ref ^ clkref) begin
+        if (clkref) q <= 0;
+        old_rd <= 0;
+        old_we <= 0;
+    end
 end
 
 localparam MODE_NORMAL = 2'b00;

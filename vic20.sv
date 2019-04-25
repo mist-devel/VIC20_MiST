@@ -58,15 +58,17 @@ module vic20_mist
    output        SDRAM_CKE
 );
 
-assign LED = ~ioctl_download & ~led_disk;
+assign LED = ~ioctl_download & ~led_disk & cass_motor;
 
 `include "build_id.v"
 
+localparam TAP_MEM_START = 22'h20000;
+
 localparam CONF_STR =
 {
-    "VIC20;PRGCRT;",
-//    "VIC20;PRGCRTTAP;",
+    "VIC20;PRGCRTTAP;",
     "S,D64,Mount Disk;",
+    "TC,Play/Stop TAP;",
     "O3,Video,PAL,NTSC;",
     "O2,CRT with load address,Yes,No;",
     "OAB,Scanlines,Off,25%,50%,75%;",
@@ -249,6 +251,7 @@ wire        st_3k_expansion        = status[6];
 wire  [1:0] st_8k_rom              = status[8:7];
 wire        st_audio_filter        = ~status[9];
 wire  [1:0] st_scanlines           = status[11:10];
+wire        st_tap_play_btn        = status[12];
 
 wire [31:0] sd_lba;
 wire        sd_rd;
@@ -356,12 +359,17 @@ vic20 VIC20
     .I_CART_RO(st_8k_rom != 2'd2),
     .I_RAM_EXT({&st_ram_expansion, st_ram_expansion[1], |st_ram_expansion, st_3k_expansion}), //at $6000(8k),$4000(8k),$2000(8k),$0400(3k)
 
+    .O_CASS_WRITE(cass_write),
+    .I_CASS_READ(cass_read),
+    .O_CASS_MOTOR(cass_motor),
+    .I_CASS_SENSE(cass_sense),
+
     .O_AUDIO(vic_audio),
     .O_AUDIO_FILTERED(vic_audio_filtered),
 
     .o_extmem_sel(sdram_en),
     .o_extmem_r_wn(sdram_wr_n),
-    .o_extmem_addr(sdram_a),
+    .o_extmem_addr(sdram_vic20_a),
     .i_extmem_data(sdram_out),
     .o_extmem_data(sdram_in),
     
@@ -378,11 +386,20 @@ assign SDRAM_CLK = clk_sys;
 
 wire  [7:0] sdram_in;
 wire  [7:0] sdram_out;
-wire [15:0] sdram_a;
+wire [15:0] sdram_vic20_a;
+wire [22:0] sdram_a;
 wire        sdram_wr_n;
 wire        sdram_en;
 reg         sdram_access;
 wire        p2_h;
+
+always_comb begin
+    casex ({prg_download | tap_download, p2_h})
+    'b01 : sdram_a = {9'b0, cart_unload ? 16'ha004 : sdram_vic20_a};
+    'b00 : sdram_a = tap_play_addr;
+    'b1X : sdram_a = ioctl_target_addr;
+    endcase
+end
 
 sdram ram
 (
@@ -393,9 +410,9 @@ sdram ram
     .bank(2'b00),
     .dout(sdram_out),
     .din ((prg_download | tap_download) ? ioctl_dout : sdram_in),
-    .addr((prg_download | tap_download) ? ioctl_target_addr : {9'b0, cart_unload ? 16'ha004 : sdram_a[15:0]}),
+    .addr(sdram_a),
     .we((sdram_en & ~sdram_wr_n) || (prg_download && !ioctl_internal_memory_wr && ioctl_ram_wr) || (tap_download && ioctl_ram_wr) || cart_unload),
-    .oe(sdram_en & sdram_wr_n)
+    .oe(p2_h ? sdram_en & sdram_wr_n : tap_sdram_oe)
 );
 
 //////////////////  PRG/ROM/TAP LOAD //////////////
@@ -438,8 +455,8 @@ always_comb begin
         'bX1_011: ioctl_target_addr = {7'h0, 3'b111, ioctl_addr[12:0]}; //kernal ntsc
         'bX1_100: ioctl_target_addr = {7'h0, 3'b110, ioctl_addr[12:0]}; //basic
         'bX1_101: ioctl_target_addr = {7'h0, 4'b1000, ioctl_addr[11:0]}; //character
-        'bX0_XXX: ioctl_target_addr = {7'h0, ioctl_reg_inject_state ? {7'h0, ioctl_reg_addr} : ioctl_prg_addr};
-		  'b1X_XXX: ioctl_target_addr = ioctl_tap_addr;
+        'b00_XXX: ioctl_target_addr = {7'h0, ioctl_reg_inject_state ? ioctl_reg_addr : ioctl_prg_addr};
+        'b1X_XXX: ioctl_target_addr = ioctl_tap_addr;
         default: ioctl_target_addr = 0;
     endcase;
 end
@@ -472,7 +489,7 @@ always @(posedge clk_sys) begin
         if (ioctl_prg_addr == 16'ha000) auto_reset <= 1;
     end
     if (tap_download && ioctl_wr) begin
-        ioctl_tap_addr <= ioctl_addr ? ioctl_tap_addr + 1'd1 : 22'h20000; //load tap to 20000
+        ioctl_tap_addr <= ioctl_addr ? ioctl_tap_addr + 1'd1 : TAP_MEM_START; //load tap to 20000
         ioctl_ram_wr <= 1;
     end
     if (rom_download) ioctl_ram_wr <= ioctl_wr;
@@ -495,15 +512,79 @@ always @(posedge clk_sys) begin
     if (ioctl_reg_inject_state) ioctl_reg_inject_state <= ioctl_reg_inject_state + 1'd1;
 end
 
+//////////////////   TAPE   //////////////////
+
+reg [21:0] tap_play_addr;
+reg [21:0] tap_last_addr;
+reg  [7:0] tap_data_in;
+reg        tap_reset;
+reg        tap_wrreq;
+reg        tap_wrfull;
+reg        tap_version;
+reg        tap_sdram_oe;
+wire       cass_read;
+wire       cass_write;
+wire       cass_motor;
+wire       cass_sense;
+
+always @(posedge clk_sys) begin
+    reg p2_hD;
+
+    if (reset) begin
+        tap_play_addr <= TAP_MEM_START;
+        tap_last_addr <= TAP_MEM_START;
+        tap_sdram_oe <= 0;
+        tap_reset <= 1;
+    end else begin
+        tap_reset <= 0;
+        if (tap_download) begin
+            tap_play_addr <= TAP_MEM_START;
+            tap_last_addr <= ioctl_tap_addr;
+            tap_reset <= 1;
+            if (ioctl_addr == 24'h0C && ioctl_wr) begin
+                tap_version <= ioctl_dout[0];
+            end
+        end
+        p2_hD <= p2_h;
+        tap_wrreq <= 0;
+        if (p2_hD && !p2_h && !ioctl_download && tap_play_addr != tap_last_addr && !tap_wrfull) tap_sdram_oe <= 1;
+        if (!p2_h && tap_sdram_oe) tap_data_in <= sdram_out;
+        if (p2_h && !p2_hD && tap_sdram_oe) begin
+            tap_wrreq <= 1;
+            tap_sdram_oe <= 0;
+            tap_play_addr <= tap_play_addr + 1'd1;
+        end
+    end
+end
+
+c1530 c1530
+(
+    .clk32(clk_sys),
+    .restart_tape(tap_reset),
+    .wav_mode(0),
+    .tap_version(tap_version),
+    .host_tap_in(tap_data_in),
+    .host_tap_wrreq(tap_wrreq),
+    .tap_fifo_wrfull(tap_wrfull),
+    .tap_fifo_error(),
+    .cass_read(cass_read),
+    .cass_write(cass_write),
+    .cass_motor(cass_motor),
+    .cass_sense(cass_sense),
+    .osd_play_stop_toggle(st_tap_play_btn),
+    .ear_input(UART_RX)
+);
 //////////////////   AUDIO   //////////////////
 
 wire [15:0] vic_audio, vic_audio_filtered;
+wire [15:0] audio_sel = st_audio_filter ? vic_audio_filtered : vic_audio;
+wire [15:0] audio_out = audio_sel + { cass_read, 12'd0 };
 
 sigma_delta_dac #(15) dac_l
 (
     .CLK(clk_sys),
     .RESET(reset),
-    .DACin(st_audio_filter ? vic_audio_filtered : vic_audio),
+    .DACin(audio_sel),
     .DACout(AUDIO_L)
 );
 
@@ -511,7 +592,7 @@ sigma_delta_dac #(15) dac_r
 (
     .CLK(clk_sys),
     .RESET(reset),
-    .DACin(st_audio_filter ? vic_audio_filtered : vic_audio),
+    .DACin(audio_out),
     .DACout(AUDIO_R)
 );
 //////////////////   VIDEO   //////////////////
