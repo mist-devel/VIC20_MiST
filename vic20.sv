@@ -69,6 +69,7 @@ localparam CONF_STR =
     "VIC20;PRGCRTTAP;",
     "S,D64,Mount Disk;",
     "TC,Play/Stop TAP;",
+    "OD,Tape sound,Off,On;",
     "O3,Video,PAL,NTSC;",
     "O2,CRT with load address,Yes,No;",
     "OAB,Scanlines,Off,25%,50%,75%;",
@@ -252,6 +253,7 @@ wire  [1:0] st_8k_rom              = status[8:7];
 wire        st_audio_filter        = ~status[9];
 wire  [1:0] st_scanlines           = status[11:10];
 wire        st_tap_play_btn        = status[12];
+wire        st_tape_sound          = status[13];
 
 wire [31:0] sd_lba;
 wire        sd_rd;
@@ -578,7 +580,7 @@ c1530 c1530
 
 wire [15:0] vic_audio, vic_audio_filtered;
 wire [15:0] audio_sel = st_audio_filter ? vic_audio_filtered : vic_audio;
-wire [15:0] audio_out = audio_sel + { cass_read, 12'd0 };
+wire [15:0] audio_out = st_tape_sound ? audio_sel + { ~(cass_read | cass_write), 12'd0 } : audio_sel;
 
 sigma_delta_dac #(15) dac_l
 (
