@@ -580,7 +580,8 @@ c1530 c1530
 
 wire [15:0] vic_audio, vic_audio_filtered;
 wire [15:0] audio_sel = st_audio_filter ? vic_audio_filtered : vic_audio;
-wire [15:0] audio_out = st_tape_sound ? audio_sel + { ~(cass_read | cass_write), 12'd0 } : audio_sel;
+wire [15:0] cass_audio = { (~cass_read | (cass_write & ~cass_motor & ~cass_sense)), 12'd0 };  // silence cass_write when motor is off because bit is in common with keyboard
+wire [15:0] audio_out = st_tape_sound ? audio_sel + cass_audio : audio_sel;
 
 sigma_delta_dac #(15) dac_l
 (
