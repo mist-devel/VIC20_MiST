@@ -304,7 +304,7 @@ begin
       r_reverse_mode   <= '1'; -- 1 is off
       r_backgnd_colour <= "0001";
     elsif rising_edge(I_CLK) then
-      if (I_ENA_4 = '1') then
+      if (I_ENA_4 = '1' and ena_1mhz_int = '1') then
         if (I_RW_L = '0') and (cs = '1') then -- cpu read access
            --the data sheet claims the registers alias
           case I_ADDR(3 downto 0) is
