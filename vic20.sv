@@ -82,6 +82,14 @@ localparam CONF_STR =
     "V,v1.0.",`BUILD_DATE
 };
 
+reg uart_rxD;
+reg uart_rxD2;
+
+// UART_RX synchronizer
+always @(posedge clk_sys) begin
+	uart_rxD <= UART_RX;
+	uart_rxD2 <= uart_rxD;
+end
 
 ////////////////////   CLOCKS   ///////////////////
 wire clk_sys;
@@ -574,7 +582,7 @@ c1530 c1530
     .cass_motor(cass_motor),
     .cass_sense(cass_sense),
     .osd_play_stop_toggle(st_tap_play_btn),
-    .ear_input(UART_RX)
+    .ear_input(uart_rxD2)
 );
 //////////////////   AUDIO   //////////////////
 
