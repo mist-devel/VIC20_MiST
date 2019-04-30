@@ -405,7 +405,7 @@ wire        p2_h;
 
 always_comb begin
     casex ({prg_download | tap_download, p2_h})
-    'b01 : sdram_a = {9'b0, cart_unload ? 16'ha004 : sdram_vic20_a};
+    'b01 : sdram_a = {7'b0, cart_unload ? 16'ha004 : sdram_vic20_a};
     'b00 : sdram_a = tap_play_addr;
     'b1X : sdram_a = ioctl_target_addr;
     endcase
@@ -466,8 +466,8 @@ always_comb begin
         'bX1_100: ioctl_target_addr = {7'h0, 3'b110, ioctl_addr[12:0]}; //basic
         'bX1_101: ioctl_target_addr = {7'h0, 4'b1000, ioctl_addr[11:0]}; //character
         'b00_XXX: ioctl_target_addr = {7'h0, ioctl_reg_inject_state ? ioctl_reg_addr : ioctl_prg_addr};
-        'b1X_XXX: ioctl_target_addr = ioctl_tap_addr;
-        default: ioctl_target_addr = 0;
+        'b10_XXX: ioctl_target_addr = ioctl_tap_addr;
+         default: ioctl_target_addr = 0;
     endcase;
 end
 
@@ -524,8 +524,8 @@ end
 
 //////////////////   TAPE   //////////////////
 
-reg [21:0] tap_play_addr;
-reg [21:0] tap_last_addr;
+reg [22:0] tap_play_addr;
+reg [22:0] tap_last_addr;
 reg  [7:0] tap_data_in;
 reg        tap_reset;
 reg        tap_wrreq;
