@@ -473,7 +473,8 @@ always_comb begin
     endcase;
 end
 
-wire ioctl_internal_memory_wr = 
+wire ioctl_internal_memory_wr =
+    ioctl_reg_inject_state ||
     (rom_download && ioctl_target_addr[15:14]) ||
     (prg_download && (ioctl_target_addr[15:10] == 6'b000000 ||
                       ioctl_target_addr[15:11] == 5'b00010 ||
