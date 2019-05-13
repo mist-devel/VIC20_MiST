@@ -36,8 +36,6 @@ module vic20_mist
    output        AUDIO_L,
    output        AUDIO_R,
 
-   input         UART_RX,
-
    input         SPI_SCK,
    output        SPI_DO,
    input         SPI_DI,
@@ -55,10 +53,14 @@ module vic20_mist
    output        SDRAM_nCS,
    output  [1:0] SDRAM_BA,
    output        SDRAM_CLK,
-   output        SDRAM_CKE
+   output        SDRAM_CKE,
+
+   input         UART_RX,
+   output        UART_TX
 );
 
 assign LED = ~ioctl_download & ~led_disk & cass_motor;
+assign UART_TX = ~cass_motor;
 
 `include "build_id.v"
 
