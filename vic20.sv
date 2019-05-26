@@ -234,9 +234,9 @@ always @(posedge clk_sys) begin
     clk_ref <= !sys_count;
     sys_count <= sys_count + 1'd1;
     
-    reset <= st_reset | st_cart_unload | buttons[1] | force_reset | ~pll_locked;
+    reset <= st_reset | st_cart_unload | buttons[1] | force_reset | fn_keys[10] | ~pll_locked;
     cart_unload <= 0;
-    if (st_cart_unload | buttons[1]) cart_unload <= 1;
+    if (st_cart_unload | buttons[1] | (fn_keys[10] & mod_keys[0])) cart_unload <= 1;
     c1541_reset <= reset;
 end
 
@@ -322,7 +322,8 @@ wire  [7:0] col_in;
 wire  [7:0] row_out;
 wire  [7:0] row_in;
 wire  [7:0] col_out;
-wire        restore_key;
+wire [11:1] fn_keys;
+wire  [2:0] mod_keys;
 
 keyboard keyboard
 (
@@ -334,7 +335,8 @@ keyboard keyboard
     .row_out(row_out),
     .row_in(row_in),
     .col_out(col_out),
-    .restore_key(restore_key)
+    .Fn(fn_keys),
+    .mod(mod_keys)
 );
 
 wire  [7:0] vic20_joy = joystick_0 | joystick_1;
@@ -365,7 +367,7 @@ vic20 VIC20
     .I_COL_OUT(col_out),
     .O_COL_IN(col_in),
     .I_ROW_OUT(row_out),
-    .I_RESTORE_OUT(restore_key),
+    .I_RESTORE_OUT(fn_keys[11]),
 
     .I_CART_EN(|st_8k_rom),  // at $A000(8k)
     .I_CART_RO(st_8k_rom != 2'd2),
@@ -584,7 +586,7 @@ c1530 c1530
     .cass_write(cass_write),
     .cass_motor(cass_motor),
     .cass_sense(cass_sense),
-    .osd_play_stop_toggle(st_tap_play_btn),
+    .osd_play_stop_toggle(st_tap_play_btn | fn_keys[9]),
     .ear_input(uart_rxD2)
 );
 //////////////////   AUDIO   //////////////////

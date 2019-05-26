@@ -49,7 +49,6 @@ module keyboard
 	output      [7:0] row_out,
     input       [7:0] row_in,
     output      [7:0] col_out,
-    output reg        restore_key,
 
 	output reg [11:1] Fn = 0,
 	output reg  [2:0] mod = 0
@@ -80,9 +79,7 @@ assign col_out = ({8{row_in[0]}} & {~keys[7][0], ~keys[6][0], ~keys[5][0], ~keys
                  ({8{row_in[6]}} & {~keys[7][6], ~keys[6][6], ~keys[5][6], ~keys[4][6], ~keys[3][6], ~keys[2][6], ~keys[1][6], ~keys[0][6]}) |
                  ({8{row_in[7]}} & {~keys[7][7], ~keys[6][7], ~keys[5][7], ~keys[4][7], ~keys[3][7], ~keys[2][7], ~keys[1][7], ~keys[0][7]});
 
-wire shift = mod[0];
 always @(posedge clk_sys) begin
-	reg auto_en;
 	reg old_reset = 0, old_sw;
 
 	old_sw <= mod[2] & mod[0];
@@ -128,7 +125,6 @@ always @(posedge clk_sys) begin
 					endcase
 
 					case(kcode)
-                        8'h7d : restore_key <= release_btn; //RESTORE (PG_UP)
 
 						8'h16 : keys[0][0] <= release_btn; // 1
 						8'h26 : keys[0][1] <= release_btn; // 3

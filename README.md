@@ -32,5 +32,12 @@ so you have to figure out what a particular game requires.
 The built-in ROMs can be overridden via placing a vic20.rom file to the root of the SD Card.
 The file format is: 1541 (16k) + Kernal PAL (8k) + Kernal NTSC (8k) + Basic (8k) + Char (4k).
 
+## Hotkeys:
+
+- F9  - Tape start/stop
+- F10 - Reset
+- RShift + F10 - Reset with cart unload
+- F11 - Restore
+
 ### Download pre-built binaries:
 Go to [releases](https://github.com/gyurco/VIC20_MiST/releases).
