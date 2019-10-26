@@ -126,7 +126,7 @@ architecture RTL of VIC20 is
   constant int_dla_cpu_debug : boolean := false;
 
     -- default
-    constant K_OFFSET : std_logic_vector (4 downto 0) := "10000"; -- h position of screen to centre on your telly
+    --constant K_OFFSET : std_logic_vector (4 downto 0) := "10000"; -- h position of screen to centre on your telly
     -- lunar lander is WAY off to the left
     --constant K_OFFSET : std_logic_vector (4 downto 0) := "11100"; -- h position of screen to centre on your telly
 
@@ -355,9 +355,6 @@ begin
       );
 
   vic : entity work.M6561
-    generic map (
-      K_OFFSET        => K_OFFSET
-      )
     port map (
       I_CLK           => i_sysclk,
       I_ENA_4         => ena_4,

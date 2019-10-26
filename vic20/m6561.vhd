@@ -68,7 +68,8 @@ library ieee ;
 
 entity M6561 is
   generic (
-    K_OFFSET          : in    std_logic_vector(4 downto 0) := "10000"
+    PAL_K_OFFSET      : in    std_logic_vector(4 downto 0) := "10000";
+    NTSC_K_OFFSET     : in    std_logic_vector(4 downto 0) := "11100"
     );
   port (
     I_CLK             : in    std_logic;
@@ -111,14 +112,14 @@ architecture RTL of M6561 is
   constant PAL_CLOCKS_PER_LINE_M1  : std_logic_vector(8 downto 0) := "100011011"; -- 284 -1
   constant PAL_TOTAL_LINES_M1      : std_logic_vector(8 downto 0) := "100110111"; -- 312 -1
   constant PAL_H_START_M1          : std_logic_vector(8 downto 0) := "000101011"; -- 44 -1
-  constant PAL_H_END_M1            : std_logic_vector(8 downto 0) := "100001111"; -- 272 -1
+  constant PAL_H_END_M1            : std_logic_vector(8 downto 0) := "100001111"; -- 272 -1 -- width: 228
   constant PAL_V_START             : std_logic_vector(8 downto 0) := "000011100"; -- 28
   -- video size 228 pixels by 284 lines (PAL)
 
   constant NTSC_CLOCKS_PER_LINE_M1 : std_logic_vector(8 downto 0) := "100000011"; -- 260 -1
   constant NTSC_TOTAL_LINES_M1     : std_logic_vector(8 downto 0) := "100000100"; -- 260 (not -1)
-  constant NTSC_H_START_M1         : std_logic_vector(8 downto 0) := "000011111"; -- 32 -1
-  constant NTSC_H_END_M1           : std_logic_vector(8 downto 0) := "011101011"; -- 236 -1
+  constant NTSC_H_START_M1         : std_logic_vector(8 downto 0) := "000100101"; -- 38 -1
+  constant NTSC_H_END_M1           : std_logic_vector(8 downto 0) := "011110111"; -- 248 -1 -- width: 210
   constant NTSC_V_START            : std_logic_vector(8 downto 0) := "000010000"; -- 16
 
   signal CLOCKS_PER_LINE_M1        : std_logic_vector(8 downto 0);
@@ -126,6 +127,7 @@ architecture RTL of M6561 is
   signal H_START_M1                : std_logic_vector(8 downto 0);
   signal H_END_M1                  : std_logic_vector(8 downto 0);
   signal V_START                   : std_logic_vector(8 downto 0);
+  signal K_OFFSET                  : std_logic_vector(4 downto 0);
 
   -- close to original                               RGB
   constant col0 : std_logic_vector(11 downto 0) := x"000";  -- 0 - 0000   Black
@@ -265,7 +267,7 @@ begin
   H_START_M1         <= PAL_H_START_M1         when I_PAL = '1' else NTSC_H_START_M1;
   H_END_M1           <= PAL_H_END_M1           when I_PAL = '1' else NTSC_H_END_M1;
   V_START            <= PAL_V_START            when I_PAL = '1' else NTSC_V_START;
-
+  K_OFFSET           <= PAL_K_OFFSET           when I_PAL = '1' else NTSC_K_OFFSET;
   -- clocking
   p2_h_int     <= not hcnt(1);
   ena_1mhz_int <= hcnt(0) and p2_h_int;  -- hcnt="01";
@@ -520,7 +522,7 @@ begin
   --
   -- video gen
   --
-  p_offset_comp : process(hcnt, r_x_offset, vcnt, r_y_offset)
+  p_offset_comp : process(hcnt, r_x_offset, vcnt, r_y_offset, K_OFFSET)
   begin
     -- nasty fudge factor to centre the piccy.
     start_h <= (hcnt = ((r_x_offset & "00") + K_OFFSET)); -- looks about right, fiddle at will
