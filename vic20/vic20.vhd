@@ -291,21 +291,13 @@ begin
   cass_sw      <= I_CASS_SENSE;
 
   -- serial
---  serial_srq_in <= '1';
---  serial_clk_in <= clk_i;
---  serial_data_in <= data_i;
---  serial_atn_in <= atn_i;
---  atn_o <= not serial_atn_out_l;
---  clk_o <= not serial_clk_out_l;
---  data_o <= not serial_data_out_l;
-
   serial_srq_in <= '1';
-  serial_clk_in <= not (serial_clk_out_l or clk_i);
-  serial_data_in <= not (serial_data_out_l or data_i);
-  serial_atn_in <= not serial_atn_out_l;
-  atn_o <= serial_atn_out_l;
-  clk_o <= serial_clk_out_l;
-  data_o <= serial_data_out_l;
+  serial_clk_in <= clk_i and not serial_clk_out_l;
+  serial_data_in <= data_i and not serial_data_out_l;
+  serial_atn_in <= atn_i and not serial_atn_out_l;
+  atn_o <= not serial_atn_out_l;
+  clk_o <= not serial_clk_out_l;
+  data_o <= not serial_data_out_l;
 
   -- joy
   joy <= i_joy;        -- 0 up, 1 down, 2 left,  3 right

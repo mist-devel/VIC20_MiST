@@ -357,10 +357,10 @@ vic20 VIC20
     .O_VSYNC(VS_O),
 //    .O_DE     => core_blankn_s,
 
-	.atn_o(vic20_iec_atn_o),
-	.clk_o(vic20_iec_clk_o),
-	.data_o(vic20_iec_data_o),
-	.clk_i(c1541_iec_clk_o),
+    .atn_o(vic20_iec_atn_o),
+    .clk_o(vic20_iec_clk_o),
+    .data_o(vic20_iec_data_o),
+    .clk_i(c1541_iec_clk_o),
     .data_i(c1541_iec_data_o),
 
     .O_ROW_IN(row_in),
@@ -708,10 +708,10 @@ c1541_sd c1541_sd (
     .disk_change ( img_mounted ),
     .disk_num ( 10'd0 ), // always 0 on MiST, the image is selected by the OSD menu
 
-	.iec_atn_i  ( vic20_iec_atn_o  ),
-	.iec_data_i ( vic20_iec_data_o ),
-	.iec_clk_i  ( vic20_iec_clk_o  ),
-	.iec_data_o ( c1541_iec_data_o ),
+    .iec_atn_i  ( vic20_iec_atn_o  ),
+    .iec_data_i ( vic20_iec_data_o ),
+    .iec_clk_i  ( vic20_iec_clk_o  ),
+    .iec_data_o ( c1541_iec_data_o ),
     .iec_clk_o  ( c1541_iec_clk_o ),
 
     .sd_lba         ( sd_lba         ),
