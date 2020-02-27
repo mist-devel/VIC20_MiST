@@ -250,6 +250,7 @@ wire  [1:0] buttons;
 wire  [1:0] switches;
 wire        scandoubler_disable;
 wire        ypbpr;
+wire        no_csync;
 
 // status word wires (9 is unused)
 wire [31:0] status;
@@ -283,13 +284,13 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
     .SPI_CLK(SPI_SCK),
     .SPI_MOSI(SPI_DI),
     .SPI_MISO(SPI_DO),
-//    .SPI_SS2(SPI_SS2),
-	
+
     .conf_str(CONF_STR),
 
     .status(status),
     .scandoubler_disable(scandoubler_disable),
     .ypbpr(ypbpr),
+    .no_csync(no_csync),
     .buttons(buttons),
     .switches(switches),
     .joystick_0(joystick_0),
@@ -308,14 +309,6 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
     .sd_conf(0),
     .sd_sdhc(1),
     .img_mounted(img_mounted),
-
-	// unused
-    .ps2_key(),
-    .ps2_mouse_clk(),
-    .ps2_mouse_data(),
-    .joystick_analog_0(),
-    .joystick_analog_1(),
-    .sd_ack_conf()
 );
 
 wire  [7:0] col_in;
@@ -454,17 +447,17 @@ reg   [7:0] ioctl_reg_data;
 
 data_io data_io (
     // SPI interface
-    .sck ( SPI_SCK ),
-    .ss  ( SPI_SS2 ),
-    .sdi ( SPI_DI  ),
+    .SPI_SCK        ( SPI_SCK ),
+    .SPI_SS2        ( SPI_SS2 ),
+    .SPI_DI         ( SPI_DI  ),
     // ram interface
-    .clk   ( clk_sys ),
-    .clkref( clk_ref  ),
-    .downloading ( ioctl_download ),
-    .index ( ioctl_index ),
-    .wr    ( ioctl_wr ),
-    .a     ( ioctl_addr ),
-    .d     ( ioctl_dout )
+    .clk_sys        ( clk_sys ),
+    .clkref_n       ( ~clk_ref  ),
+    .ioctl_download ( ioctl_download ),
+    .ioctl_index    ( ioctl_index ),
+    .ioctl_wr       ( ioctl_wr ),
+    .ioctl_addr     ( ioctl_addr ),
+    .ioctl_dout     ( ioctl_dout )
 );
 
 always_comb begin
@@ -626,78 +619,55 @@ wire  [3:0] G_O;
 wire  [3:0] B_O;
 wire        HS_O;
 wire        VS_O;
-wire        SD_HS_O;
-wire        SD_VS_O;
-wire        osd_hs_in;
-wire        osd_vs_in;
 
-wire  [5:0] SD_R_O;
-wire  [5:0] SD_G_O;
-wire  [5:0] SD_B_O;
-wire  [5:0] osd_r_in;
-wire  [5:0] osd_g_in;
-wire  [5:0] osd_b_in;
+wire        hs,vs;
 
-wire        vsync_out;
-wire        hsync_out;
-wire        csync_out = ~(~HS_O | ~VS_O);
+mist_video #(.COLOR_DEPTH(4), .OSD_COLOR(3'd5), .SD_HCNT_WIDTH(10)) mist_video (
+    .clk_sys     ( clk_sys    ),
 
-// a minimig vga->scart cable expects a composite sync signal on the VGA_HS output.
-// and VCC on VGA_VS (to switch into rgb mode)
-assign      VGA_HS = (scandoubler_disable || ypbpr)? csync_out : SD_HS_O;
-assign      VGA_VS = (scandoubler_disable || ypbpr)? 1'b1 : SD_VS_O;
+    // OSD SPI interface
+    .SPI_SCK     ( SPI_SCK    ),
+    .SPI_SS3     ( SPI_SS3    ),
+    .SPI_DI      ( SPI_DI     ),
 
-scandoubler scandoubler
-(
-    .clk_sys(clk_sys),
-    .scanlines(st_scanlines),
-    .hs_in(HS_O),
-    .vs_in(VS_O),
-    .r_in(R_O),
-    .g_in(G_O),
-    .b_in(B_O),
-    .hs_out(SD_HS_O),
-    .vs_out(SD_VS_O),
-    .r_out(SD_R_O),
-    .g_out(SD_G_O),
-    .b_out(SD_B_O)
+    // scanlines (00-none 01-25% 10-50% 11-75%)
+    .scanlines   ( st_scanlines  ),
+
+    // non-scandoubled pixel clock divider 0 - clk_sys/4, 1 - clk_sys/2
+    .ce_divider  ( 1'b0       ),
+
+    // 0 = HVSync 31KHz, 1 = CSync 15KHz
+    .scandoubler_disable ( scandoubler_disable ),
+    // disable csync without scandoubler
+    .no_csync    ( no_csync   ),
+    // YPbPr always uses composite sync
+    .ypbpr       ( ypbpr      ),
+    // Rotate OSD [0] - rotate [1] - left or right
+    .rotate      ( 2'b00      ),
+    // composite-like blending
+    .blend       ( 1'b0       ),
+
+    // video in
+    .R           ( R_O        ),
+    .G           ( G_O        ),
+    .B           ( B_O        ),
+
+    .HSync       ( HS_O       ),
+    .VSync       ( VS_O       ),
+
+    // MiST video output signals
+    .VGA_R       ( VGA_R      ),
+    .VGA_G       ( VGA_G      ),
+    .VGA_B       ( VGA_B      ),
+    .VGA_VS      ( vs         ),
+    .VGA_HS      ( hs         )
 );
 
-wire [5:0] osd_r_o, osd_g_o, osd_b_o;
+// Use different alignment of csync @15kHz
+wire   cs = ~(~HS_O | ~VS_O);
+assign VGA_HS = (~no_csync & scandoubler_disable & ~ypbpr) ? cs : hs;
+assign VGA_VS = (~no_csync & scandoubler_disable & ~ypbpr) ? 1'b1 : vs;
 
-osd osd
-(
-    .clk_sys(clk_sys),
-    .ce_pix(scandoubler_disable ? clk8m : clk16m),
-    .SPI_DI(SPI_DI),
-    .SPI_SCK(SPI_SCK),
-    .SPI_SS3(SPI_SS3),
-    .R_in(scandoubler_disable ? {R_O, 2'b00} : SD_R_O),
-    .G_in(scandoubler_disable ? {G_O, 2'b00} : SD_G_O),
-    .B_in(scandoubler_disable ? {B_O, 2'b00} : SD_B_O),
-    .HSync(scandoubler_disable ? HS_O : SD_HS_O),
-    .VSync(scandoubler_disable ? VS_O : SD_VS_O),
-    .R_out(osd_r_o),
-    .G_out(osd_g_o),
-    .B_out(osd_b_o)
-    );
-
-wire [5:0] y, pb, pr;
-
-rgb2ypbpr rgb2ypbpr 
-(
-	.red   ( osd_r_o ),
-	.green ( osd_g_o ),
-	.blue  ( osd_b_o ),
-	.y     ( y       ),
-	.pb    ( pb      ),
-	.pr    ( pr      )
-);
-	 
-assign VGA_R = ypbpr?pr:osd_r_o;
-assign VGA_G = ypbpr? y:osd_g_o;
-assign VGA_B = ypbpr?pb:osd_b_o;
-	 
 //////////////////   DISK   //////////////////
 
 wire led_disk;
