@@ -55,6 +55,9 @@ library ieee ;
 --  use UNISIM.Vcomponents.all;
 
 entity VIC20 is
+  generic (
+    I_EXTERNAL_ROM        : std_logic := '0'
+  );
   port (
     --
     i_sysclk              : in    std_logic;  -- comes from CLK_A via DCM (divided by 4)
@@ -762,9 +765,9 @@ begin
       c_din <= via1_dout;
     elsif (io_sel_l(0) = '0') and (c_addr(5) = '1') then -- blk5
       c_din <= via2_dout;
-    elsif (blk_sel_l(6) = '0') then
+    elsif (blk_sel_l(6) = '0' and I_EXTERNAL_ROM = '0') then
       c_din <= basic_rom_dout;
-    elsif (blk_sel_l(7) = '0') then
+    elsif (blk_sel_l(7) = '0' and I_EXTERNAL_ROM = '0') then
       c_din <= kernal_rom_dout;
     elsif (v_data_oe_l = '0') then
       c_din <= v_data_read_mux;
@@ -994,17 +997,19 @@ begin
   --
   -- extension memory - connected to external dram controller
   --
-
+  -- at $C000-$FFFF according to I_EXTERNAL_ROM
   -- at $6000(8k),$4000(8k),$2000(8k),$0400(3k) according to I_RAM_EXT
   -- at $A000(8k) according to I_CART_EN
   extmem       <= '1' when (ram_sel_l(1) and ram_sel_l(2) and ram_sel_l(3))='0' and I_RAM_EXT(0)='1' else
                   '1' when blk_sel_l(1)='0' and I_RAM_EXT(1)='1' else
                   '1' when blk_sel_l(2)='0' and I_RAM_EXT(2)='1' else
                   '1' when blk_sel_l(3)='0' and I_RAM_EXT(3)='1' else
+                  '1' when blk_sel_l(6)='0' and I_EXTERNAL_ROM = '1' else -- BASIC ROM
+                  '1' when blk_sel_l(7)='0' and I_EXTERNAL_ROM = '1' else -- KERNAL ROM
                   '1' when blk_sel_l(5)='0' and I_CART_EN='1' else
                   '0';
   o_extmem_sel <= extmem and p2_h;
-  o_extmem_r_wn <= c_rw_l or ( not(blk_sel_l(5)) and I_CART_RO ); -- disable write if we emulate a ROM on $A000
+  o_extmem_r_wn <= c_rw_l or not blk_sel_l(6) or not blk_sel_l(7) or ( not(blk_sel_l(5)) and I_CART_RO ); -- disable write if we emulate a ROM on $A000
   o_extmem_addr <= c_addr(15 downto 0);
   expansion_din <= i_extmem_data;
   o_extmem_data <= c_dout;

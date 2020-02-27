@@ -233,8 +233,8 @@ always @(posedge clk_sys) begin
     clk16m <= sys_count[0];
     clk_ref <= !sys_count;
     sys_count <= sys_count + 1'd1;
-    
-    reset <= st_reset | st_cart_unload | buttons[1] | force_reset | fn_keys[10] | ~pll_locked;
+
+    reset <= st_reset | st_cart_unload | buttons[1] | rom_download | force_reset | fn_keys[10] | ~pll_locked;
     cart_unload <= 0;
     if (st_cart_unload | buttons[1] | (fn_keys[10] & mod_keys[0])) cart_unload <= 1;
     c1541_reset <= reset;
@@ -341,7 +341,7 @@ keyboard keyboard
 
 wire  [7:0] vic20_joy = joystick_0 | joystick_1;
 
-vic20 VIC20
+vic20 #(.I_EXTERNAL_ROM(1'b1)) VIC20
 (
     .I_SYSCLK(clk_sys),
     .I_SYSCLK_EN(clk8m & ~ioctl_download),
@@ -407,9 +407,14 @@ wire        sdram_en;
 reg         sdram_access;
 wire        p2_h;
 
+wire [22:0] sdram_vic20_a_adj =
+    cart_unload ? 16'ha004 : 
+    sdram_vic20_a[15:13] == 3'b111 ? { st_ntsc, sdram_vic20_a } : // NTSC/PAL Kernal
+    sdram_vic20_a;
+
 always_comb begin
-    casex ({prg_download | tap_download, p2_h})
-    'b01 : sdram_a = {7'b0, cart_unload ? 16'ha004 : sdram_vic20_a};
+    casex ({rom_download | prg_download | tap_download, p2_h})
+    'b01 : sdram_a = sdram_vic20_a_adj;
     'b00 : sdram_a = tap_play_addr;
     'b1X : sdram_a = ioctl_target_addr;
     endcase
@@ -423,9 +428,9 @@ sdram ram
     .clk(clk_sys),
     .bank(2'b00),
     .dout(sdram_out),
-    .din ((prg_download | tap_download) ? ioctl_dout : sdram_in),
+    .din ((rom_download | prg_download | tap_download) ? ioctl_dout : sdram_in),
     .addr(sdram_a),
-    .we((sdram_en & ~sdram_wr_n) || (prg_download && !ioctl_internal_memory_wr && ioctl_ram_wr) || (tap_download && ioctl_ram_wr) || cart_unload),
+    .we((sdram_en & ~sdram_wr_n) || ((rom_download || prg_download) && !ioctl_internal_memory_wr && ioctl_ram_wr) || (tap_download && ioctl_ram_wr) || cart_unload),
     .oe(p2_h ? sdram_en & sdram_wr_n : tap_sdram_oe)
 );
 
@@ -466,7 +471,7 @@ always_comb begin
     casex ({tap_download, rom_download, ioctl_addr[15:13]})
         'bX1_00X: ioctl_target_addr = {7'h0, 2'b00, ioctl_addr[13:0]}; //1541
         'bX1_010: ioctl_target_addr = {7'h0, 3'b111, ioctl_addr[12:0]}; //kernal pal
-        'bX1_011: ioctl_target_addr = {7'h0, 3'b111, ioctl_addr[12:0]}; //kernal ntsc
+        'bX1_011: ioctl_target_addr = {7'h1, 3'b111, ioctl_addr[12:0]}; //kernal ntsc
         'bX1_100: ioctl_target_addr = {7'h0, 3'b110, ioctl_addr[12:0]}; //basic
         'bX1_101: ioctl_target_addr = {7'h0, 4'b1000, ioctl_addr[11:0]}; //character
         'b00_XXX: ioctl_target_addr = {7'h0, ioctl_reg_inject_state ? ioctl_reg_addr : ioctl_prg_addr};
@@ -477,7 +482,7 @@ end
 
 wire ioctl_internal_memory_wr =
     ioctl_reg_inject_state ||
-    (rom_download && ioctl_target_addr[15:14]) ||
+    (rom_download && (ioctl_target_addr[15:13] == 3'b101)) || // only char rom is internal
     (prg_download && (ioctl_target_addr[15:10] == 6'b000000 ||
                       ioctl_target_addr[15:11] == 5'b00010 ||
                       ioctl_target_addr[15:11] == 5'b00011 ||
@@ -495,10 +500,13 @@ always @(posedge clk_sys) begin
             if (ioctl_addr == 16'h0000) ioctl_prg_addr[7:0] <= ioctl_dout; else
             if (ioctl_addr == 16'h0001) ioctl_prg_addr[15:8] <= ioctl_dout; else begin
                 ioctl_ram_wr <= 1;
-                if (ioctl_addr != 16'h0002) ioctl_prg_addr <= ioctl_prg_addr + 1'd1;
+                if (ioctl_addr != 16'h0002 && ioctl_prg_addr != 16'hbfff) ioctl_prg_addr <= ioctl_prg_addr + 1'd1;
             end
         end else begin
-            ioctl_prg_addr <= ioctl_addr ? ioctl_prg_addr + 1'd1 : 16'ha000; //load to $a000
+            if (ioctl_addr == 0)
+                ioctl_prg_addr <= 16'ha000; // load to $a000 without header
+            else if (ioctl_prg_addr != 16'hbfff)
+                ioctl_prg_addr <= ioctl_prg_addr + 1'd1; // increment load addr, but don't overwrite ROMs
             ioctl_ram_wr <= 1;
         end
         if (ioctl_prg_addr == 16'ha000) auto_reset <= 1;
