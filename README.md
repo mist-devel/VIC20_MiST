@@ -28,8 +28,8 @@ so you have to figure out what a particular game requires.
  - 8k+ Extensions: $2000, $4000, $6000
  - 8k ROM/RAM: $a000
 
-### ROM update:
-The built-in ROMs can be overridden via placing a vic20.rom file to the root of the SD Card.
+### ROM file:
+A VIC20.ROM file is mandatory at the root of the SD Card.
 The file format is: 1541 (16k) + Kernal PAL (8k) + Kernal NTSC (8k) + Basic (8k) + Char (4k).
 
 ## Hotkeys:
@@ -40,4 +40,7 @@ The file format is: 1541 (16k) + Kernal PAL (8k) + Kernal NTSC (8k) + Basic (8k)
 - F11 - Restore
 
 ### Download pre-built binaries:
-Go to [releases](https://github.com/gyurco/VIC20_MiST/releases).
+https://github.com/mist-devel/mist-binaries/tree/master/cores/vic20
+
+### Source code:
+https://github.com/gyurco/VIC20_MiST
