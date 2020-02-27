@@ -271,7 +271,7 @@ wire        sd_wr;
 wire        sd_ack;
 wire  [7:0] sd_dout;
 wire        sd_dout_strobe;
-wire        sd_din;
+wire  [7:0] sd_din;
 wire  [8:0] sd_buff_addr;
 wire        img_mounted;
 
