@@ -97,7 +97,6 @@ architecture Gideon of via6522 is
     signal serport_en    : std_logic;
     signal ser_cb2_o     : std_logic;
     signal hs_cb2_o      : std_logic;
-    signal trigger_serial: std_logic;
         
     alias  ca2_event     : std_logic is irq_events(0);
     alias  ca1_event     : std_logic is irq_events(1);
@@ -261,10 +260,6 @@ begin
             -- Interrupt logic
             irq_flags <= irq_flags or irq_events;
 
-            if falling = '1' then
-                trigger_serial <= '0';
-            end if;                
-            
             -- Writes --
             if wen='1' and falling = '1' then
                 last_data <= data_in;
@@ -311,9 +306,6 @@ begin
                 
                 when X"A" => -- Serial port
                     serial_flag <= '0';
-                    if shift_active = '0' then
-                        trigger_serial <= '1';
-                    end if;
                     
                 when X"B" => -- ACR (Auxiliary Control Register)
                     acr <= data_in;
@@ -405,7 +397,6 @@ begin
                     
                 when X"A" => -- SR
                     serial_flag <= '0';
-                    trigger_serial <= '1';
     
                 when others =>
                     null;
@@ -424,7 +415,6 @@ begin
                 cb2_pulse_o     <= '1';
                 timer_a_latch  <= latch_reset_pattern;
                 timer_b_latch  <= latch_reset_pattern;
-                trigger_serial <= '0';
             end if;
         end if;
     end process;
@@ -567,10 +557,12 @@ begin
     end block tmr_b;
     
     ser: block
+        signal trigger_serial: std_logic;
         signal shift_clock_d : std_logic;
         signal shift_clock   : std_logic;
         signal shift_tick_r  : std_logic;
         signal shift_tick_f  : std_logic;
+        signal shift_timer_tick : std_logic;
         signal cb2_c         : std_logic := '0';
         signal bit_cnt       : integer range 0 to 7;
         signal shift_pulse   : std_logic;
@@ -582,7 +574,7 @@ begin
                 shift_pulse <= '1';
                 
             when "00"|"01" =>
-                shift_pulse <= timer_b_tick;
+                shift_pulse <= shift_timer_tick;
             
             when others =>
                 shift_pulse <= shift_clock and not shift_clock_d;
@@ -610,43 +602,40 @@ begin
 
                     shift_clock_d <= shift_clock;
 
-                    if shift_tick_f = '1' then
-                        ser_cb2_o <= shift_reg(7);
-                    end if;
+                end if;
+
+                if falling = '1' then
+                    shift_timer_tick <= timer_b_tick;
                 end if;
 
                 if reset = '1' then
                     shift_clock <= '1';
                     shift_clock_d <= '1';
-                    ser_cb2_o <= '1';
                 end if;
             end if;
         end process;
 
         cb1_t <= '0' when shift_clk_sel="11" else serport_en;
         cb1_o <= shift_clock_d;
-        
+        ser_cb2_o <= shift_reg(7);
+
         serport_en <= shift_dir or shift_clk_sel(1) or shift_clk_sel(0);
-        
+        trigger_serial <= '1' when (ren='1' or wen='1') and addr=x"A" else '0';
+        shift_tick_r <= not shift_clock_d and shift_clock;
+        shift_tick_f <= shift_clock_d and not shift_clock;
+
         process(clock)
         begin
             if rising_edge(clock) then
                 if reset = '1' then
                     shift_reg <= X"FF";
-                    shift_tick_r <= '0';
-                    shift_tick_f <= '0';
                 elsif falling = '1' then
-                    shift_tick_r <= not shift_clock_d and shift_clock;
-                    shift_tick_f <= shift_clock_d and not shift_clock;
-
                     if wen = '1' and addr = X"A" then
                         shift_reg <= data_in;
-                    elsif shift_tick_r = '1' then
-                        if shift_dir='1' then -- output
-                            shift_reg <= shift_reg(6 downto 0) & shift_reg(7);
-                        else
-                            shift_reg <= shift_reg(6 downto 0) & cb2_c;
-                        end if;
+                    elsif shift_dir='1' and shift_tick_f = '1' then -- output
+                        shift_reg <= shift_reg(6 downto 0) & shift_reg(7);
+                    elsif shift_dir='0' and shift_tick_r = '1' then -- input
+                        shift_reg <= shift_reg(6 downto 0) & cb2_c;
                     end if;
                 end if;
             end if;
@@ -654,7 +643,7 @@ begin
 
         -- tell people that we're ready!
         serial_event <= shift_tick_r and not shift_active and rising;
-        
+
         process(clock)
         begin
             if rising_edge(clock) then
@@ -676,7 +665,7 @@ begin
                         end if;                            
                     end if;
                 end if;
-                
+
                 if reset='1' then
                     shift_active <= '0';
                     bit_cnt      <= 0;
