@@ -97,7 +97,11 @@ architecture Gideon of via6522 is
     signal serport_en    : std_logic;
     signal ser_cb2_o     : std_logic;
     signal hs_cb2_o      : std_logic;
-        
+    signal cb1_t_int     : std_logic;
+    signal cb1_o_int     : std_logic;
+    signal cb2_t_int     : std_logic;
+    signal cb2_o_int     : std_logic;
+
     alias  ca2_event     : std_logic is irq_events(0);
     alias  ca1_event     : std_logic is irq_events(1);
     alias  serial_event  : std_logic is irq_events(2);
@@ -164,8 +168,13 @@ begin
     cb2_event <= (cb2_c xor cb2_d) and (cb2_d xor cb2_edge_select);
 
     ca2_t <= ca2_is_output;
-    cb2_t <= cb2_is_output when serport_en='0' else shift_dir;
-    cb2_o <= hs_cb2_o      when serport_en='0' else ser_cb2_o;
+    cb2_t_int <= cb2_is_output when serport_en='0' else shift_dir;
+    cb2_o_int <= hs_cb2_o      when serport_en='0' else ser_cb2_o;
+
+    cb1_t <= cb1_t_int;
+    cb1_o <= cb1_o_int;
+    cb2_t <= cb2_t_int;
+    cb2_o <= cb2_o_int;
 
     with ca2_out_mode select ca2_o <= 
         ca2_handshake_o when "00",
@@ -206,8 +215,16 @@ begin
             -- CA1/CA2/CB1/CB2 edge detect flipflops
             ca1_c <= To_X01(ca1_i);
             ca2_c <= To_X01(ca2_i);
-            cb1_c <= To_X01(cb1_i);
-            cb2_c <= To_X01(cb2_i);
+            if cb1_t_int = '0' then
+                cb1_c <= To_X01(cb1_i);
+            else
+                cb1_c <= cb1_o_int;
+            end if;
+            if cb2_t_int = '0'  then
+                cb2_c <= To_X01(cb2_i);
+            else
+                cb2_c <= cb2_o_int;
+            end if;
 
             ca1_d <= ca1_c;
             ca2_d <= ca2_c;
@@ -567,7 +584,7 @@ begin
         signal bit_cnt       : integer range 0 to 7;
         signal shift_pulse   : std_logic;
     begin
-        process(shift_active, timer_b_tick, shift_clk_sel, shift_clock, shift_clock_d)
+        process(shift_active, timer_b_tick, shift_clk_sel, shift_clock, shift_clock_d, shift_timer_tick)
         begin
             case shift_clk_sel is
             when "10" =>
@@ -615,8 +632,8 @@ begin
             end if;
         end process;
 
-        cb1_t <= '0' when shift_clk_sel="11" else serport_en;
-        cb1_o <= shift_clock_d;
+        cb1_t_int <= '0' when shift_clk_sel="11" else serport_en;
+        cb1_o_int <= shift_clock_d;
         ser_cb2_o <= shift_reg(7);
 
         serport_en <= shift_dir or shift_clk_sel(1) or shift_clk_sel(0);
