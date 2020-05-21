@@ -167,6 +167,8 @@ architecture RTL of VIC20 is
     signal vic_dout           : std_logic_vector( 7 downto 0);
     signal vic_din            : std_logic_vector(11 downto 0);
     signal p2_h               : std_logic;
+    signal p2_h_rise          : std_logic;
+    signal p2_h_fall          : std_logic;
     signal ena_1mhz           : std_logic;
     signal via1_dout          : std_logic_vector( 7 downto 0);
     signal via2_dout          : std_logic_vector( 7 downto 0);
@@ -209,11 +211,11 @@ architecture RTL of VIC20 is
     signal expansion_irq_l    : std_logic;
 
     -- VIAs
-    signal via1_nmi_l         : std_logic;
+    signal via1_nmi           : std_logic;
     signal via1_pa_in         : std_logic_vector(7 downto 0);
     signal via1_pa_out        : std_logic_vector(7 downto 0);
 
-    signal via2_irq_l         : std_logic;
+    signal via2_irq           : std_logic;
 
     signal cass_write         : std_logic;
     signal cass_read          : std_logic;
@@ -223,11 +225,11 @@ architecture RTL of VIC20 is
     signal keybd_col_out      : std_logic_vector(7 downto 0);
     signal keybd_col_out_s    : std_logic_vector(7 downto 0);
     signal keybd_col_in       : std_logic_vector(7 downto 0);
-    signal keybd_col_oe_l     : std_logic_vector(7 downto 0);
+    signal keybd_col_oe       : std_logic_vector(7 downto 0);
     signal keybd_row_in       : std_logic_vector(7 downto 0);
     signal keybd_row_out      : std_logic_vector(7 downto 0);
     signal keybd_row_out_s    : std_logic_vector(7 downto 0);
-    signal keybd_row_oe_l     : std_logic_vector(7 downto 0);
+    signal keybd_row_oe       : std_logic_vector(7 downto 0);
     signal keybd_restore      : std_logic;
 
     signal joy                : std_logic_vector(3 downto 0);
@@ -281,9 +283,9 @@ begin
   -- <= reset_l_sampled;
 
   -- user port
-  user_port_cb1_in <= '0';
-  user_port_cb2_in <= '0';
-  user_port_in <= x"00";
+  user_port_cb1_in <= '1';
+  user_port_cb2_in <= '1';
+  user_port_in <= x"FF";
   -- <= user_port_out
   -- <= user_port_out_oe_l
 
@@ -356,6 +358,8 @@ begin
       I_RESET_L       => reset_l,
       O_ENA_1MHZ      => ena_1mhz,
       O_P2_H          => p2_h,
+      O_P2_H_RISE     => p2_h_rise,
+      O_P2_H_FALL     => p2_h_fall,
 
       I_RW_L          => v_rw_l,
 
@@ -506,46 +510,35 @@ begin
   O_AUDIO_FILTERED <= audio_filtered_signed + 32768;
   O_AUDIO          <= "0" & vic_audio & "000000000";
 
-  via1 : entity work.M6522
-    port map (
-      CLK             => i_sysclk,
-      I_P2_H          => p2_h,
-      RESET_L         => reset_l_sampled,
-      ENA_4           => ena_4,
+  via1: entity work.via6522
+  port map (
+    clock       => i_sysclk,
+    rising      => p2_h_rise,
+    falling     => p2_h_fall,
+    reset       => not reset_l_sampled,
 
-      I_RS            => c_addr(3 downto 0),
-      I_DATA          => v_data(7 downto 0),
-      O_DATA          => via1_dout,
-      O_DATA_OE_L     => open,
+    addr        => c_addr(3 downto 0),
+    wen         => c_addr(4) and not io_sel_l(0) and not c_rw_l,
+    ren         => c_addr(4) and not io_sel_l(0) and c_rw_l,
+    data_in     => v_data(7 downto 0),
+    data_out    => via1_dout,
 
-      I_RW_L          => c_rw_l,
-      I_CS1           => c_addr(4),
-      I_CS2_L         => io_sel_l(0),
+    -- pio --
+    port_a_o    => via1_pa_out,
+    port_a_i    => via1_pa_in,
+    port_b_i    => user_port_in,
 
-      O_IRQ_L         => via1_nmi_l, -- note, not open drain
+    -- handshake pins
+    ca1_i       => keybd_restore,
 
-      I_CA1           => keybd_restore,
-      I_CA2           => cass_motor,
-      O_CA2           => cass_motor,
-      O_CA2_OE_L      => open,
+    ca2_o       => cass_motor,
+    ca2_i       => cass_motor,
 
-      I_PA            => via1_pa_in,
-      O_PA            => via1_pa_out,
-      O_PA_OE_L       => open,
+    cb1_i       => user_port_cb1_in,
+    cb2_i       => user_port_cb2_in,
 
-      -- port b
-      I_CB1           => user_port_cb1_in,
-      O_CB1           => user_port_cb1_out,
-      O_CB1_OE_L      => user_port_cb1_oe_l,
-
-      I_CB2           => user_port_cb2_in,
-      O_CB2           => user_port_cb2_out,
-      O_CB2_OE_L      => user_port_cb2_oe_l,
-
-      I_PB            => user_port_in,
-      O_PB            => user_port_out,
-      O_PB_OE_L       => user_port_oe_l
-      );
+    irq         => via1_nmi
+  );
 
   serial_atn_out_l <= via1_pa_out(7);
   via1_pa_in(7) <= serial_atn_in;
@@ -557,50 +550,43 @@ begin
   via1_pa_in(1) <= serial_data_in;
   via1_pa_in(0) <= serial_clk_in;
 
-  via2 : entity work.M6522
-    port map (
-      CLK             => I_SYSCLK,
-      I_P2_H          => p2_h,
-      RESET_L         => reset_l_sampled,
-      ENA_4           => ena_4,
+  via2: entity work.via6522
+  port map (
+    clock       => i_sysclk,
+    rising      => p2_h_rise,
+    falling     => p2_h_fall,
+    reset       => not reset_l_sampled,
 
-      I_RS            => c_addr(3 downto 0),
-      I_DATA          => v_data(7 downto 0),
-      O_DATA          => via2_dout,
-      O_DATA_OE_L     => open,
+    addr        => c_addr(3 downto 0),
+    wen         => c_addr(5) and not io_sel_l(0) and not c_rw_l,
+    ren         => c_addr(5) and not io_sel_l(0) and c_rw_l,
+    data_in     => v_data(7 downto 0),
+    data_out    => via2_dout,
 
-      I_RW_L          => c_rw_l,
-      I_CS1           => c_addr(5),
-      I_CS2_L         => io_sel_l(0),
+		-- pio --
+    port_a_o    => keybd_row_out,
+    port_a_t    => keybd_row_oe,
+    port_a_i    => keybd_row_in,
 
-      O_IRQ_L         => via2_irq_l, -- note, not open drain
+    port_b_o    => keybd_col_out,
+    port_b_t    => keybd_col_oe,
+    port_b_i    => keybd_col_in,
 
-      I_CA1           => cass_read,
-      I_CA2           => serial_clk_out_l,
-      O_CA2           => serial_clk_out_l,
-      O_CA2_OE_L      => open,
+    -- handshake pins
+    ca1_i       => cass_read,
 
-      I_PA            => keybd_row_in,
-      O_PA            => keybd_row_out,
-      O_PA_OE_L       => keybd_row_oe_l,
+    ca2_o       => serial_clk_out_l,
+    ca2_i       => serial_clk_out_l,
+    cb1_i       => serial_srq_in,
+    cb2_o       => serial_data_out_l,
+    cb2_i       => serial_data_out_l,
 
-      -- port b
-      I_CB1           => serial_srq_in,
-      O_CB1           => open,
-      O_CB1_OE_L      => open,
-
-      I_CB2           => serial_data_out_l,
-      O_CB2           => serial_data_out_l,
-      O_CB2_OE_L      => open,
-
-      I_PB            => keybd_col_in,
-      O_PB            => keybd_col_out,
-      O_PB_OE_L       => keybd_col_oe_l
-      );
+    irq         => via2_irq
+  );
 
   cass_write <= keybd_col_out(3);
-  keybd_row_out_s <= keybd_row_out or keybd_row_oe_l;
-  keybd_col_out_s <= keybd_col_out or keybd_col_oe_l;
+  keybd_row_out_s <= keybd_row_out or not keybd_row_oe;
+  keybd_col_out_s <= keybd_col_out or not keybd_col_oe;
 
   O_ROW_IN <= not ( keybd_row_out_s );
   keybd_col_in(6 downto 0) <= not( I_COL_OUT(6 downto 0) );
@@ -611,15 +597,15 @@ begin
   keybd_restore <= not( I_RESTORE_OUT );
 
   p_irq_resolve : process(expansion_irq_l, expansion_nmi_l,
-                          via2_irq_l, via1_nmi_l)
+                          via2_irq, via1_nmi)
   begin
     c_irq_l <= '1';
-    if (expansion_irq_l = '0') or (via2_irq_l = '0') then
+    if (expansion_irq_l = '0') or (via2_irq = '1') then
       c_irq_l <= '0';
     end if;
 
     c_nmi_l <= '1';
-    if (expansion_nmi_l = '0') or (via1_nmi_l = '0') then
+    if (expansion_nmi_l = '0') or (via1_nmi = '1') then
       c_nmi_l <= '0';
     end if;
   end process;

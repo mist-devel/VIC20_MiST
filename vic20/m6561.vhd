@@ -77,6 +77,8 @@ entity M6561 is
     I_RESET_L         : in    std_logic;
     O_ENA_1MHZ        : out   std_logic; -- 1.1 MHz strobe
     O_P2_H            : out   std_logic; -- 2.2 MHz cpu access
+    O_P2_H_RISE       : out   std_logic;
+    O_P2_H_FALL       : out   std_logic;
 
     I_RW_L            : in    std_logic;
 
@@ -270,6 +272,9 @@ begin
   K_OFFSET           <= PAL_K_OFFSET           when I_PAL = '1' else NTSC_K_OFFSET;
   -- clocking
   p2_h_int     <= not hcnt(1);
+  O_P2_H_RISE    <= '1' when I_ENA_4 = '1' and hcnt(1 downto 0) = "11" else '0';
+  O_P2_H_FALL    <= '1' when I_ENA_4 = '1' and hcnt(1 downto 0) = "01" else '0';
+
   ena_1mhz_int <= hcnt(0) and p2_h_int;  -- hcnt="01";
   O_ENA_1MHZ <= ena_1mhz_int;
   O_P2_H <= p2_h_int; -- vic access when P2_H = '0'

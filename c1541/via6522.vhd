@@ -1,17 +1,15 @@
 -------------------------------------------------------------------------------
---
--- (C) COPYRIGHT 2007-2017, Gideon's Logic Architectures
---
--------------------------------------------------------------------------------
 -- Title      : VIA 6522
 -------------------------------------------------------------------------------
 -- Author     : Gideon Zweijtzer  <gideon.zweijtzer@gmail.com>
 -------------------------------------------------------------------------------
 -- Description: This module implements the 6522 VIA chip.
---              Please note: A LOT OF REVERSE ENGINEERING has been done to
---              make this module as accurate as it is now. Please do not copy
---              (use in your own projects) without written permission of the
---              author.
+--              A LOT OF REVERSE ENGINEERING has been done to make this module
+--              as accurate as it is now. Thanks to gyurco for ironing out some
+--              differences that were left unnoticed.
+-------------------------------------------------------------------------------
+-- License:     GPL 3.0 - Free to use, distribute and change to your own needs.
+--              Leaving a reference to the author will be highly appreciated.
 -------------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
@@ -597,20 +595,33 @@ begin
                 shift_pulse <= shift_clock and not shift_clock_d;
 
             end case;
-            
+
             if shift_active = '0' then
-                shift_pulse <= '0';
+                -- Mode 0 still loads the shift register to external pulse (MMBEEB SD-Card interface uses this)
+                if shift_mode_control = "000" then
+                    shift_pulse <= shift_clock and not shift_clock_d;
+                else
+                    shift_pulse <= '0';
+                end if;
             end if;
+
         end process;
+
 
         process(clock)
         begin
             if rising_edge(clock) then
+
+                cb2_c  <= To_X01(cb2_i);
+
                 if rising = '1' then
-                    cb2_c  <= To_X01(cb2_i);
 
                     if shift_active='0' then
-                        shift_clock <= '1';
+                        if shift_mode_control = "000" then
+                            shift_clock <= To_X01(cb1_i);
+                        else
+                            shift_clock <= '1';
+                        end if;
                     elsif shift_clk_sel = "11" then
                         shift_clock <= To_X01(cb1_i);
                     elsif shift_pulse = '1' then
@@ -659,13 +670,13 @@ begin
         end process;        
 
         -- tell people that we're ready!
-        serial_event <= shift_tick_r and not shift_active and rising;
+        serial_event <= shift_tick_r and not shift_active and rising and serport_en;
 
         process(clock)
         begin
             if rising_edge(clock) then
                 if falling = '1' then
-                    if shift_active = '0' then
+                    if shift_active = '0' and shift_mode_control /= "000" then
                         if trigger_serial = '1' then
                             bit_cnt      <= 7;
                             shift_active <= '1';
@@ -691,3 +702,4 @@ begin
         end process;                
     end block ser;
 end Gideon;
+
