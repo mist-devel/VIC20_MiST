@@ -306,7 +306,7 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
     .sd_buff_addr(sd_buff_addr),
     .sd_conf(0),
     .sd_sdhc(1),
-    .img_mounted(img_mounted),
+    .img_mounted(img_mounted)
 );
 
 wire  [7:0] col_in;
