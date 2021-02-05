@@ -216,7 +216,6 @@ architecture RTL of M6561 is
   signal h_row_active_r   : boolean;
   signal h_row_activeD    : boolean;
   signal h_row_activeD2   : boolean;
-  signal h_row_activeD3   : boolean;
   signal h_active         : boolean;
   signal h_active_r       : boolean;
   signal h_activeD        : boolean;
@@ -230,7 +229,6 @@ architecture RTL of M6561 is
   signal v_char_last      : boolean;
   signal v_char_lastD     : boolean;
   signal v_char_lastD2    : boolean;
-  signal v_char_lastD3    : boolean;
   signal row_count        : std_logic_vector(3 downto 0);
   signal row_count_r      : std_logic_vector(3 downto 0);
   signal row_char         : std_logic_vector(5 downto 0);
@@ -611,21 +609,21 @@ begin
           h_activeD2 <= h_activeD;
           h_activeD3 <= h_activeD2;
 
-          start_hD <= start_h;
-          start_hD2 <= start_hD;
-          start_hD3 <= start_hD2;
-
           h_row_activeD <= h_row_active;
           h_row_activeD2 <= h_row_activeD;
-          h_row_activeD3 <= h_row_activeD2;
-
-          v_char_lastD <= v_char_last;
-          v_char_lastD2 <= v_char_lastD;
-          v_char_lastD3 <= v_char_lastD2;
 
           v_activeD <= v_active;
           v_activeD2 <= v_activeD;
           v_activeD3 <= v_activeD2;
+        end if;
+
+        if hcnt(1 downto 0) = "00" then
+          start_hD <= start_h;
+          start_hD2 <= start_hD;
+          start_hD3 <= start_hD2;
+
+          v_char_lastD <= v_char_last;
+          v_char_lastD2 <= v_char_lastD;
         end if;
 
         h_activeD4 <= h_activeD3;
@@ -633,7 +631,7 @@ begin
         -- counter used for video matrix address
         if v_cnt_last and h_cnt_last then
           last_matrix_cnt <= (others => '0'); -- top left;
-        elsif hcnt(1 downto 0) = "11" and v_char_lastD3 and h_row_activeD3 then
+        elsif hcnt(1 downto 0) = "11" and v_char_lastD2 and h_row_activeD2 then
           last_matrix_cnt <= matrix_cnt;
         end if;
 
