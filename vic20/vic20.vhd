@@ -700,7 +700,7 @@ begin
   begin
     -- simplified data read mux
     if (col_ram_sel_l = '0' and p2_h='1') then
-      v_data_read_mux <= "0000" & col_ram_dout;
+      v_data_read_mux <= v_data_read_muxr(7 downto 4) & col_ram_dout;
       v_data_oe_l     <= '0';
     elsif (vic_oe_l = '0') then
       v_data_read_mux <= vic_dout;
