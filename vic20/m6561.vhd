@@ -258,7 +258,9 @@ architecture RTL of M6561 is
   signal op_reg           : std_logic_vector(7 downto 0);
 
   signal op_multi         : std_logic;
+  signal op_multi_r       : std_logic;
   signal op_col           : std_logic_vector(2 downto 0);
+  signal op_col_r         : std_logic_vector(2 downto 0);
 
   signal col_mux_sel      : std_logic_vector(3 downto 0);
   signal col_rgb          : std_logic_vector(11 downto 0);
@@ -693,8 +695,8 @@ begin
           op_cnt <= op_cnt_r;
           --buffer character
           op_reg   <= din_reg_char(7 downto 0);
-          op_multi <= din_reg_cell(11);
-          op_col   <= din_reg_cell(10 downto 8);
+          op_multi_r <= din_reg_cell(11);
+          op_col_r   <= din_reg_cell(10 downto 8);
         elsif (op_cnt(3) = '1') then
           op_cnt <= op_cnt + "1";
         end if;
@@ -710,6 +712,10 @@ begin
         -- yuk, a mux. Hang the expense.
         bit_sel <= '0';
 
+		  -- AMR - delay op_multi and op_col to match delay on bit_sel, otherwise colour changes happen a pixel too soon.
+        op_multi <= op_multi_r;
+        op_col   <= op_col_r;
+		  
         case op_cnt(2 downto 0) is
           when "000" => bit_sel <= op_reg(7);
           when "001" => bit_sel <= op_reg(6);
