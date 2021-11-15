@@ -391,7 +391,12 @@ begin
 	 -- audio filters
 	
 	 -- Filters are running at sysclk which is different in PAL/NTSC
-	 -- so we have to define two different banks of filters 	 
+	 -- so we have to define two different banks of filters 
+	 
+	 -- (Alternatively, we could simply create an ena signal which triggers
+	 -- every 28 or 35 cycles, then use a single filter bank with 
+	 -- fclk_hz_g set to 1MHz - but the filters aren't horrendously expensive. -- AMR) 
+
 
 	 -- we use a well oversampled LP output...
 	 
@@ -399,9 +404,9 @@ begin
    intrinsic_RC_lp_PAL: entity work.rc_filter_1o
     generic map (
           highpass_g   => false,
-          R_ohms_g     => 1000,    -- 1kOhms   \  LP from output
-          C_p_farads_g => 10000,   -- 10 nF    /  with ~16kHz fg
-          fclk_hz_g => sysclk_PAL,    -- we use the sysclk
+          R_ohms_g     => 1000,      -- 1kOhms   \  LP from output
+          C_p_farads_g => 10000,     -- 10 nF    /  with ~16kHz fg
+          fclk_hz_g => sysclk_PAL/4, -- we use the sysclk / 4 (clk_ena freq)
           cwidth_g  => 12,
           dwidthi_g => 6,
           dwidtho_g => 16
@@ -417,9 +422,9 @@ begin
    audio_RC_lp_PAL: entity work.rc_filter_1o
     generic map (
           highpass_g   => false,
-          R_ohms_g     => 1000,    -- 1kOhms   \  LP on PCB
-          C_p_farads_g => 100000,  -- 100 nF   /  with ~1.6kHz fg
-          fclk_hz_g => sysclk_PAL,    -- we use the sysclk
+          R_ohms_g     => 1000,      -- 1kOhms   \  LP on PCB
+          C_p_farads_g => 100000,    -- 100 nF   /  with ~1.6kHz fg
+          fclk_hz_g => sysclk_PAL/4, -- we use the sysclk / 4 (clk_ena freq)
           cwidth_g  => 14,
           dwidthi_g => 16,
           dwidtho_g => 16
@@ -435,9 +440,9 @@ begin
    audio_RC_hp_PAL: entity work.rc_filter_1o
     generic map (
           highpass_g   => true,
-          R_ohms_g     => 1000,      -- 1kOhms   \  HP to connector
-          C_p_farads_g => 1000000,   -- 1 uF     /  with ~160Hz fg
-          fclk_hz_g => sysclk_PAL,      -- we use the sysclk
+          R_ohms_g     => 10000,     -- 10kOhms  \  HP to connector (nominal 10k line load)
+          C_p_farads_g => 1000000,   -- 1 uF     /  with ~16Hz fg
+          fclk_hz_g => sysclk_PAL/4, -- we use the sysclk / 4 (clk_ena freq)
           cwidth_g  => 16,
           dwidthi_g => 16,
           dwidtho_g => 16
@@ -455,9 +460,9 @@ begin
    intrinsic_RC_lp_NTSC: entity work.rc_filter_1o
     generic map (
           highpass_g   => false,
-          R_ohms_g     => 1000,    -- 1kOhms   \  LP from output
-          C_p_farads_g => 10000,   -- 10 nF    /  with ~16kHz fg
-          fclk_hz_g => sysclk_NTSC,    -- we use the sysclk
+          R_ohms_g     => 1000,       -- 1kOhms   \  LP from output
+          C_p_farads_g => 10000,      -- 10 nF    /  with ~16kHz fg
+          fclk_hz_g => sysclk_NTSC/4, -- we use the sysclk / 4 (clk_ena freq)
           cwidth_g  => 12,
           dwidthi_g => 6,
           dwidtho_g => 16
@@ -473,9 +478,9 @@ begin
    audio_RC_lp_NTSC: entity work.rc_filter_1o
     generic map (
           highpass_g   => false,
-          R_ohms_g     => 1000,    -- 1kOhms   \  LP on PCB
-          C_p_farads_g => 100000,  -- 100 nF   /  with ~1.6kHz fg
-          fclk_hz_g => sysclk_NTSC,    -- we use the sysclk
+          R_ohms_g     => 1000,       -- 1kOhms   \  LP on PCB
+          C_p_farads_g => 100000,     -- 100 nF   /  with ~1.6kHz fg
+          fclk_hz_g => sysclk_NTSC/4, -- we use the sysclk / 4 (clk_ena freq)
           cwidth_g  => 14,
           dwidthi_g => 16,
           dwidtho_g => 16
@@ -491,9 +496,9 @@ begin
    audio_RC_hp_NTSC: entity work.rc_filter_1o
     generic map (
           highpass_g   => true,
-          R_ohms_g     => 1000,      -- 1kOhms   \  HP to connector
-          C_p_farads_g => 1000000,   -- 1 uF     /  with ~160Hz fg
-          fclk_hz_g => sysclk_NTSC,      -- we use the sysclk
+          R_ohms_g     => 10000,      -- 10kOhms  \  HP to connector (nominal 10k line load)
+          C_p_farads_g => 1000000,    -- 1 uF     /  with ~16Hz fg
+          fclk_hz_g => sysclk_NTSC/4, -- we use the sysclk / 4 (clk_ena freq)
           cwidth_g  => 16,
           dwidthi_g => 16,
           dwidtho_g => 16
