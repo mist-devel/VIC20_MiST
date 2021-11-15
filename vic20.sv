@@ -273,6 +273,7 @@ wire        sd_dout_strobe;
 wire  [7:0] sd_din;
 wire  [8:0] sd_buff_addr;
 wire        img_mounted;
+wire [31:0] img_size;
 
 user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 (
@@ -306,7 +307,8 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
     .sd_buff_addr(sd_buff_addr),
     .sd_conf(0),
     .sd_sdhc(1),
-    .img_mounted(img_mounted)
+    .img_mounted(img_mounted),
+	 .img_size(img_size)
 );
 
 wire  [7:0] col_in;
@@ -677,11 +679,26 @@ wire c1541_iec_atn_o;
 wire c1541_iec_data_o;
 wire c1541_iec_clk_o;
 
+reg disk_present;
+always @(posedge clk_1541)
+	disk_present=|img_size;
+
+reg c1541_reset_32_d;
+reg c1541_reset_32;
+
+// Sync reset to the 32MHz domain since some of the logic inside
+// the emulated drive uses synchronous resets.
+always @(posedge clk_1541) begin
+	c1541_reset_32_d<=c1541_reset;
+	c1541_reset_32<=c1541_reset_32_d;
+end
+	
 c1541_sd c1541_sd (
     .clk32 ( clk_1541 ),
-    .reset ( c1541_reset ),
+    .reset ( c1541_reset_32 ),
 
     .disk_change ( img_mounted ),
+	 .disk_mount ( disk_present),
     .disk_num ( 10'd0 ), // always 0 on MiST, the image is selected by the OSD menu
 
     .iec_atn_i  ( vic20_iec_atn_o  ),
