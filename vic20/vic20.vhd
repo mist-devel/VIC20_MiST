@@ -174,13 +174,10 @@ architecture RTL of VIC20 is
     signal via2_dout          : std_logic_vector( 7 downto 0);
 		
     signal vic_audio           : std_logic_vector( 5 downto 0);
-    signal PAL_lp_output       : std_logic_vector(15 downto 0);
-    signal PAL_lp_filtered     : std_logic_vector(15 downto 0);
-    signal PAL_audio_filtered  : std_logic_vector(15 downto 0);
-    signal NTSC_lp_output      : std_logic_vector(15 downto 0);
-    signal NTSC_lp_filtered    : std_logic_vector(15 downto 0);
-    signal NTSC_audio_filtered : std_logic_vector(15 downto 0);
-    signal audio_filtered_signed : std_logic_vector(15 downto 0);
+    signal lp_output       : std_logic_vector(15 downto 0);
+    signal lp_filtered     : std_logic_vector(15 downto 0);
+	 signal filter_count : unsigned(5 downto 0);
+	 signal filter_tick : std_logic;
 
     -- video system
     signal v_addr             : std_logic_vector(13 downto 0);
@@ -391,32 +388,50 @@ begin
 	 -- audio filters
 	
 	 -- Filters are running at sysclk which is different in PAL/NTSC
-	 -- so we have to define two different banks of filters 
-	 
-	 -- (Alternatively, we could simply create an ena signal which triggers
-	 -- every 28 or 35 cycles, then use a single filter bank with 
-	 -- fclk_hz_g set to 1MHz - but the filters aren't horrendously expensive. -- AMR) 
+	 -- so we count ena ticks and create an adaptive filter_tick signal of approx 250KHz.
+	 -- We use use the well oversampled LP output for "unfiltered" audio since the
+	 -- 2nd order SD DAC doesn't like sharp transitions.
+	 -- There's little point modelling the DC blocking capacitor here since the
+	 -- board already has equivalent capacitors on its audio output -- AMR. 
 
+	process(i_sysclk)
+	begin
+		if rising_edge(i_sysclk) then
+			filter_tick<='0';
+			if i_sysclk_en='1' then
+				if filter_count/="000000" then
+					filter_count<=filter_count-1;
+				else
+					if i_pal='1' then
+						filter_count<=to_unsigned(35,6);
+					else
+						filter_count<=to_unsigned(28,6);
+					end if;
+					filter_tick<='1';
+				end if;
+			end if;
+		end if;
+	end process;
 
 	 -- we use a well oversampled LP output...
 	 
 	 -- PAL filters	 
-   intrinsic_RC_lp_PAL: entity work.rc_filter_1o
+   intrinsic_RC_lp: entity work.rc_filter_1o
     generic map (
           highpass_g   => false,
           R_ohms_g     => 1000,      -- 1kOhms   \  LP from output
           C_p_farads_g => 10000,     -- 10 nF    /  with ~16kHz fg
-          fclk_hz_g => sysclk_PAL/4, -- we use the sysclk / 4 (clk_ena freq)
+          fclk_hz_g => 250000,
           cwidth_g  => 12,
           dwidthi_g => 6,
           dwidtho_g => 16
     )
     port map (
           clk_i   => i_sysclk,
-          clken_i => i_sysclk_en,
+          clken_i => filter_tick,
           res_i   => i_reset,
           din_i   => vic_audio,
-          dout_o  => PAL_lp_output
+          dout_o  => lp_output
         );
 
    audio_RC_lp_PAL: entity work.rc_filter_1o
@@ -424,96 +439,22 @@ begin
           highpass_g   => false,
           R_ohms_g     => 1000,      -- 1kOhms   \  LP on PCB
           C_p_farads_g => 100000,    -- 100 nF   /  with ~1.6kHz fg
-          fclk_hz_g => sysclk_PAL/4, -- we use the sysclk / 4 (clk_ena freq)
+          fclk_hz_g => 250000, -- we use the sysclk / 4 (clk_ena freq)
           cwidth_g  => 14,
           dwidthi_g => 16,
           dwidtho_g => 16
     )
     port map (
           clk_i   => i_sysclk,
-          clken_i => i_sysclk_en,
+          clken_i => filter_tick,
           res_i   => i_reset,
-          din_i   => PAL_lp_output,
-          dout_o  => PAL_lp_filtered
+          din_i   => lp_output,
+          dout_o  => lp_filtered
         );
 
-   audio_RC_hp_PAL: entity work.rc_filter_1o
-    generic map (
-          highpass_g   => true,
-          R_ohms_g     => 10000,     -- 10kOhms  \  HP to connector (nominal 10k line load)
-          C_p_farads_g => 1000000,   -- 1 uF     /  with ~16Hz fg
-          fclk_hz_g => sysclk_PAL/4, -- we use the sysclk / 4 (clk_ena freq)
-          cwidth_g  => 16,
-          dwidthi_g => 16,
-          dwidtho_g => 16
-    )
-    port map (
-          clk_i   => i_sysclk,
-          clken_i => i_sysclk_en,
-          res_i   => i_reset,
-          din_i   => PAL_lp_filtered,
-          dout_o  => PAL_audio_filtered
-        );
+  O_AUDIO_FILTERED <= lp_filtered;
+  O_AUDIO          <= lp_output;
 
-	 -- NTSC filters
-	 
-   intrinsic_RC_lp_NTSC: entity work.rc_filter_1o
-    generic map (
-          highpass_g   => false,
-          R_ohms_g     => 1000,       -- 1kOhms   \  LP from output
-          C_p_farads_g => 10000,      -- 10 nF    /  with ~16kHz fg
-          fclk_hz_g => sysclk_NTSC/4, -- we use the sysclk / 4 (clk_ena freq)
-          cwidth_g  => 12,
-          dwidthi_g => 6,
-          dwidtho_g => 16
-    )
-    port map (
-          clk_i   => i_sysclk,
-          clken_i => i_sysclk_en,
-          res_i   => i_reset,
-          din_i   => vic_audio,
-          dout_o  => NTSC_lp_output
-        );
-
-   audio_RC_lp_NTSC: entity work.rc_filter_1o
-    generic map (
-          highpass_g   => false,
-          R_ohms_g     => 1000,       -- 1kOhms   \  LP on PCB
-          C_p_farads_g => 100000,     -- 100 nF   /  with ~1.6kHz fg
-          fclk_hz_g => sysclk_NTSC/4, -- we use the sysclk / 4 (clk_ena freq)
-          cwidth_g  => 14,
-          dwidthi_g => 16,
-          dwidtho_g => 16
-    )
-    port map (
-          clk_i   => i_sysclk,
-          clken_i => i_sysclk_en,
-          res_i   => i_reset,
-          din_i   => NTSC_lp_output,
-          dout_o  => NTSC_lp_filtered
-        );
-
-   audio_RC_hp_NTSC: entity work.rc_filter_1o
-    generic map (
-          highpass_g   => true,
-          R_ohms_g     => 10000,      -- 10kOhms  \  HP to connector (nominal 10k line load)
-          C_p_farads_g => 1000000,    -- 1 uF     /  with ~16Hz fg
-          fclk_hz_g => sysclk_NTSC/4, -- we use the sysclk / 4 (clk_ena freq)
-          cwidth_g  => 16,
-          dwidthi_g => 16,
-          dwidtho_g => 16
-    )
-    port map (
-          clk_i   => i_sysclk,
-          clken_i => i_sysclk_en,
-          res_i   => i_reset,
-          din_i   => NTSC_lp_filtered,
-          dout_o  => NTSC_audio_filtered
-        );
-
-  audio_filtered_signed <= PAL_audio_filtered when i_pal='1' else NTSC_audio_filtered;
-  O_AUDIO_FILTERED <= audio_filtered_signed + 32768;
-  O_AUDIO          <= "0" & vic_audio & "000000000";
 
   via1: entity work.via6522
   port map (
