@@ -69,7 +69,7 @@ localparam TAP_MEM_START = 22'h20000;
 localparam CONF_STR =
 {
     "VIC20;PRGCRTTAP;",
-    "S,D64,Mount Disk;",
+    "S0U,D64,Mount Disk;",
     "TC,Play/Stop TAP;",
     "OD,Tape sound,Off,On;",
     "O3,Video,PAL,NTSC;",
@@ -308,7 +308,7 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
     .sd_conf(0),
     .sd_sdhc(1),
     .img_mounted(img_mounted),
-	 .img_size(img_size)
+    .img_size(img_size)
 );
 
 wire  [7:0] col_in;
@@ -698,7 +698,7 @@ c1541_sd c1541_sd (
     .reset ( c1541_reset_32 ),
 
     .disk_change ( img_mounted ),
-	 .disk_mount ( disk_present),
+    .disk_mount ( disk_present),
     .disk_num ( 10'd0 ), // always 0 on MiST, the image is selected by the OSD menu
 
     .iec_atn_i  ( vic20_iec_atn_o  ),
