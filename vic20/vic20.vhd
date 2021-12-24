@@ -106,9 +106,15 @@ entity VIC20 is
     o_extmem_addr         : out   std_logic_vector(15 downto 0);
     i_extmem_data         : in    std_logic_vector(7 downto 0);
     o_extmem_data         : out   std_logic_vector(7 downto 0);
-    
+    o_rom_sel             : out   std_logic;
+    o_blk123_sel          : out   std_logic;
+    o_blk5_sel            : out   std_logic;
+    o_ram123_sel          : out   std_logic;
+    o_io2_sel             : out   std_logic;
+    o_io3_sel             : out   std_logic;
+
     o_p2_h                : out   std_logic;
-    
+
     -- you may leave this disconnected if not required
     debug                 : out   std_logic_vector(32 downto 0);  -- amount of channels of DLA (e.g. via aux_io)
     debugi                : in    std_logic_vector(2 downto 0);
@@ -577,7 +583,7 @@ begin
     end if;
   end process;
 
-  p_blk_addr_decode : process(c_addr)
+  p_blk_addr_decode : process(c_addr, blk_sel_l)
   begin
     blk_sel_l <= "11111111";
     case c_addr(15 downto 13) is
@@ -591,6 +597,8 @@ begin
       when "111" => blk_sel_l <= "01111111"; -- kernal    ($E000...)
       when others => null;
     end case;
+	 o_blk123_sel<=(not c_addr(15)) and (c_addr(14) or c_addr(13));
+	 o_blk5_sel<=not blk_sel_l(5);
   end process;
 
   p_v_mux : process(c_addr, c_dout, c_rw_l, p2_h, vic_addr, v_data_read_mux,
@@ -610,7 +618,7 @@ begin
     end if;
   end process;
 
-  p_ram_addr_decode : process(v_addr, blk_sel_l, p2_h)
+  p_ram_addr_decode : process(v_addr, blk_sel_l, p2_h, ram_sel_l)
   begin
     ram_sel_l <= "11111111";
     if ((p2_h = '1') and (blk_sel_l(0) = '0')) or -- cpu
@@ -627,6 +635,7 @@ begin
         when others => null;
       end case;
     end if;
+	 o_ram123_sel<=not (ram_sel_l(1) and ram_sel_l(2) and ram_sel_l(3));
   end process;
 
   p_vic_din_mux : process(p2_h, col_ram_dout, v_data)
@@ -939,12 +948,19 @@ begin
                   '1' when blk_sel_l(6)='0' and I_EXTERNAL_ROM = '1' else -- BASIC ROM
                   '1' when blk_sel_l(7)='0' and I_EXTERNAL_ROM = '1' else -- KERNAL ROM
                   '1' when blk_sel_l(5)='0' and I_CART_EN='1' else
+                  '1' when io_sel_l(2)='0' else
+                  '1' when io_sel_l(3)='0' else
                   '0';
   o_extmem_sel <= extmem and p2_h;
   o_extmem_r_wn <= c_rw_l or not blk_sel_l(6) or not blk_sel_l(7) or ( not(blk_sel_l(5)) and I_CART_RO ); -- disable write if we emulate a ROM on $A000
   o_extmem_addr <= c_addr(15 downto 0);
   expansion_din <= i_extmem_data;
   o_extmem_data <= c_dout;
+
+  -- Extra signals needed for MegaCart emulation
+  o_rom_sel <= '1' when (blk_sel_l(6)='0' or blk_sel_l(7)='0') and I_EXTERNAL_ROM='1' else '0';
+  o_io2_sel <= not io_sel_l(2);
+  o_io3_sel <= not io_sel_l(3);
 
   -- CPU debugging via external lines
 

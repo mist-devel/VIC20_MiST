@@ -48,6 +48,7 @@ port(
 	sd_rd          : out std_logic;
 	sd_wr          : out std_logic;
 	sd_ack         : in  std_logic;
+	sd_busy_o      : out std_logic;
 
 	sd_buff_addr   : in  std_logic_vector(8 downto 0);
 	sd_buff_dout   : in  std_logic_vector(7 downto 0);
@@ -413,5 +414,6 @@ dbg_mtr <= mtr;
 dbg_act <= act;
 
 led <= act;
+sd_busy_o <= sd_busy; -- The core needs to know when it's safe to mux the sd interface.
 
 end struct;

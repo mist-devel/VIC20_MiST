@@ -40,7 +40,7 @@ set_global_assignment -name DEVICE EP3C25E144C8
 set_global_assignment -name TOP_LEVEL_ENTITY vic20_mist
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION "12.0 SP2"
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "16:03:22  OCTOBER 26, 2012"
-set_global_assignment -name LAST_QUARTUS_VERSION "13.1 SP4.26"
+set_global_assignment -name LAST_QUARTUS_VERSION 13.1
 set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
 set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name DEVICE_FILTER_PACKAGE TQFP
@@ -305,6 +305,8 @@ set_global_assignment -name VHDL_FILE vic20/vic20_clocks.vhd
 set_global_assignment -name VHDL_FILE vic20/vic20.vhd
 set_global_assignment -name VHDL_FILE vic20/rc_filter_1o.vhd
 set_global_assignment -name VHDL_FILE vic20/m6561.vhd
+set_global_assignment -name VERILOG_FILE vic20/megacart_nvram.v
+set_global_assignment -name VERILOG_FILE vic20/megacart.v
 set_global_assignment -name VHDL_FILE c1541/via6522.vhd
 set_global_assignment -name VHDL_FILE c1541/spram.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE c1541/mist_sd_card.sv

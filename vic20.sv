@@ -71,14 +71,22 @@ localparam CONF_STR =
     "VIC20;PRGCRTTAP;",
     "S0U,D64,Mount Disk;",
     "TC,Play/Stop TAP;",
-    "OD,Tape sound,Off,On;",
-    "O3,Video,PAL,NTSC;",
-    "O2,CRT with load address,Yes,No;",
-    "OAB,Scanlines,Off,25%,50%,75%;",
-    "O45,Enable 8K+ Expansion,Off,8K,16K,24K;",
-    "O6,Enable 3K Expansion,Off,On;",
-    "O78,Enable 8k ROM,Off,RO,RW;",
-    "O9,Audio Filter,On,Off;",
+    "P1,Memory configuration;",
+    "P1O78,Cartridge ,Off,ROM,RAM;",
+    "P1O2,CRT with load address,Yes,No;",
+    "P1O6,3K RAM Cartridge,Off,On;",
+    "P1O45,8K+ RAM Cartridge,Off,8K,16K,24K;",
+    "P2,Megacart;",
+    "P2OF,Megacart,Off,On (overrides RAM);",
+    "P2F,ROM,Load Megacart ROM;",
+    "P2S1U,NV ,Mount NVRAM;",
+    "P2TG,Write NVRAM;",
+    "P3,Video / Audio;",
+    "P3O3,Video,PAL,NTSC;",
+    "P3OAB,Scanlines,Off,25%,50%,75%;",
+    "P3OE,Composite blend,Off,On;",
+    "P3OD,Tape sound,Off,On;",
+    "P3O9,Audio Filter,On,Off;",
     "T0,Reset;",
     "T1,Reset with cart unload;",
     "V,v1.0.",`BUILD_DATE
@@ -263,17 +271,45 @@ wire        st_audio_filter        = ~status[9];
 wire  [1:0] st_scanlines           = status[11:10];
 wire        st_tap_play_btn        = status[12];
 wire        st_tape_sound          = status[13];
+wire        st_blend               = status[14];
+wire        st_megacart            = status[15];
+wire        st_writenv             = status[16];
 
 wire [31:0] sd_lba;
-wire        sd_rd;
-wire        sd_wr;
+wire [1:0]  sd_rd;
+wire [1:0]  sd_wr;
 wire        sd_ack;
 wire  [7:0] sd_dout;
 wire        sd_dout_strobe;
 wire  [7:0] sd_din;
 wire  [8:0] sd_buff_addr;
-wire        img_mounted;
+wire  [1:0] img_mounted;
 wire [31:0] img_size;
+
+// Multiplexers for sd related signals.
+wire uio_sel_nvram, sd_busy_1541;
+
+wire [31:0] sd_lba_nvram, sd_lba_1541;
+assign sd_lba = uio_sel_nvram ? sd_lba_nvram : sd_lba_1541;
+
+wire sd_rd_nvram, sd_rd_1541;
+assign sd_rd[1] = uio_sel_nvram ? sd_rd_nvram : 1'b0;
+assign sd_rd[0] = uio_sel_nvram ? 1'b0 : sd_rd_1541;
+
+wire sd_wr_nvram, sd_wr_1541;
+assign sd_wr[1] = uio_sel_nvram ? sd_wr_nvram : 1'b0;
+assign sd_wr[0] = uio_sel_nvram ? 1'b0 : sd_wr_1541;
+
+wire [7:0] sd_din_nvram, sd_din_1541;
+assign sd_din = uio_sel_nvram ? sd_din_nvram : sd_din_1541;
+
+wire sd_ack_nvram, sd_ack_1541;
+assign sd_ack_nvram = uio_sel_nvram ? sd_ack : 1'b0;
+assign sd_ack_1541 = uio_sel_nvram ? 1'b0 : sd_ack;
+
+wire sd_strobe_nvram, sd_strobe_1541;
+assign sd_strobe_nvram = uio_sel_nvram ? sd_dout_strobe : 1'b0;
+assign sd_strobe_1541 = uio_sel_nvram ? 1'b0 : sd_dout_strobe;
 
 user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 (
@@ -334,11 +370,22 @@ keyboard keyboard
 
 wire  [7:0] vic20_joy = joystick_0 | joystick_1;
 
+wire vic_wr_n;
+wire vic_rom_sel;
+wire vic_io2_sel;
+wire vic_io3_sel;
+wire vic_blk123_sel;
+wire vic_blk5_sel;
+wire vic_ram123_sel;
+
+wire [7:0] to_vic;
+wire [7:0] from_vic;
+
 vic20 #(.I_EXTERNAL_ROM(1'b1)) VIC20
 (
     .I_SYSCLK(clk_sys),
     .I_SYSCLK_EN(clk8m & ~ioctl_download),
-    .I_RESET(reset),
+    .I_RESET(reset | mc_reset),
     .I_PAL(~st_ntsc),
 
     .I_JOY(~{vic20_joy[0],vic20_joy[1],vic20_joy[2],vic20_joy[3]}),
@@ -362,9 +409,9 @@ vic20 #(.I_EXTERNAL_ROM(1'b1)) VIC20
     .I_ROW_OUT(row_out),
     .I_RESTORE_OUT(fn_keys[11]),
 
-    .I_CART_EN(|st_8k_rom),  // at $A000(8k)
-    .I_CART_RO(st_8k_rom != 2'd2),
-    .I_RAM_EXT({&st_ram_expansion, st_ram_expansion[1], |st_ram_expansion, st_3k_expansion}), //at $6000(8k),$4000(8k),$2000(8k),$0400(3k)
+    .I_CART_EN(st_megacart | (|st_8k_rom)),  // at $A000(8k)
+    .I_CART_RO(st_megacart ? 1'b0 : (st_8k_rom != 2'd2)),
+    .I_RAM_EXT(st_megacart ? 4'b1111 : {&st_ram_expansion, st_ram_expansion[1], |st_ram_expansion, st_3k_expansion}), //at $6000(8k),$4000(8k),$2000(8k),$0400(3k)
 
     .O_CASS_WRITE(cass_write),
     .I_CASS_READ(cass_read),
@@ -375,11 +422,17 @@ vic20 #(.I_EXTERNAL_ROM(1'b1)) VIC20
     .O_AUDIO_FILTERED(vic_audio_filtered),
 
     .o_extmem_sel(sdram_en),
-    .o_extmem_r_wn(sdram_wr_n),
+    .o_extmem_r_wn(vic_wr_n),
     .o_extmem_addr(sdram_vic20_a),
-    .i_extmem_data(sdram_out),
-    .o_extmem_data(sdram_in),
-    
+    .i_extmem_data(to_vic),
+    .o_extmem_data(from_vic),
+    .o_rom_sel(vic_rom_sel),
+    .o_io2_sel(vic_io2_sel),
+    .o_io3_sel(vic_io3_sel),
+    .o_blk123_sel(vic_blk123_sel),
+    .o_blk5_sel(vic_blk5_sel),
+    .o_ram123_sel(vic_ram123_sel),
+
     .o_p2_h(p2_h),
 
     // -- ROM setup bus
@@ -391,11 +444,9 @@ vic20 #(.I_EXTERNAL_ROM(1'b1)) VIC20
 //////////////////   MEMORY   //////////////////
 assign SDRAM_CLK = clk_sys;
 
-wire  [7:0] sdram_in;
 wire  [7:0] sdram_out;
 wire [15:0] sdram_vic20_a;
 wire [22:0] sdram_a;
-wire        sdram_wr_n;
 wire        sdram_en;
 reg         sdram_access;
 wire        p2_h;
@@ -403,15 +454,102 @@ wire        p2_h;
 wire [22:0] sdram_vic20_a_adj =
     cart_unload ? 16'ha004 : 
     sdram_vic20_a[15:13] == 3'b111 ? { st_ntsc, sdram_vic20_a } : // NTSC/PAL Kernal
-    sdram_vic20_a;
+	 mc_sdram_addr;
+//   sdram_vic20_a;
 
 always_comb begin
-    casex ({rom_download | prg_download | tap_download, p2_h})
+    casex ({megacart_download | rom_download | prg_download | tap_download, p2_h})
     'b01 : sdram_a = sdram_vic20_a_adj;
     'b00 : sdram_a = tap_play_addr;
     'b1X : sdram_a = ioctl_target_addr;
     endcase
 end
+
+wire mc_reset;
+wire [22:0] mc_sdram_addr;
+wire [7:0] mc_to_vic;
+wire mc_sdram_wr_n;
+wire mc_rom_sel;
+wire mc_nvram_sel;
+wire mc_qm;
+wire mc_sdram_en;
+
+megacart mc
+(
+	.clk(clk_sys),
+	.reset_n(pll_locked & !st_reset),
+	.active(st_megacart),
+	.vic_addr(sdram_vic20_a),
+	.vic_wr_n(vic_wr_n),
+	.vic_sdram_en(sdram_en),
+	.vic_io2_sel(vic_io2_sel),
+	.vic_io3_sel(vic_io3_sel),
+	.vic_blk123_sel(vic_blk123_sel),
+	.vic_blk5_sel(vic_blk5_sel),
+	.vic_ram123_sel(vic_ram123_sel),
+	.from_vic(from_vic),
+	.to_vic(mc_to_vic),
+	.mc_addr(mc_sdram_addr),
+	.mc_wr_n(mc_sdram_wr_n),
+	.mc_rom_sel(mc_rom_sel),
+	.mc_nvram_sel(mc_nvram_sel),
+	.mc_qm(mc_qm),
+	.mc_sdram_en(mc_sdram_en),
+	.mc_soft_reset(mc_reset)
+);
+
+wire [7:0] mc_nvram_out;
+
+megacart_nvram nvr
+(
+	// VIC20 interface
+	.clk_a          ( clk_sys         ),
+	.reset_n        ( pll_locked & !st_reset ),
+	.a_a            (sdram_vic20_a    ),
+	.d_a            ( from_vic        ),
+	.q_a            ( mc_nvram_out    ),
+	.we_a           ( mc_nvram_sel & ~vic_wr_n ),
+	// UserIO interface
+	.clk_b          ( clk_1541        ),
+	.readnv         ( img_mounted[1]  ),
+	.writenv        ( st_writenv      ),
+	.uio_busy       ( sd_busy_1541    ),
+	.nvram_sel      ( uio_sel_nvram   ),
+	.sd_lba         ( sd_lba_nvram    ),
+	.sd_rd          ( sd_rd_nvram     ),
+	.sd_wr          ( sd_wr_nvram     ),
+	.sd_ack         ( sd_ack_nvram    ),
+	.sd_buff_din    ( sd_din_nvram    ),
+	.sd_buff_dout   ( sd_dout         ),
+	.sd_buff_wr     ( sd_strobe_nvram ),
+	.sd_buff_addr   ( sd_buff_addr    ),
+	.img_size       ( img_size )
+);
+
+
+// Megacart can drive the data bus - as can NVRAM.
+assign to_vic = mc_qm ? mc_to_vic : (mc_nvram_sel ? mc_nvram_out : sdram_out);
+
+// SDRAM port arbitration
+
+wire [7:0] sdram_in;
+assign sdram_in =
+	(megacart_download | rom_download | prg_download | tap_download) ? ioctl_dout
+		: from_vic;
+
+wire sdram_we;
+assign sdram_we = (mc_sdram_en & ~mc_sdram_wr_n) || // Write originates from VIC20
+	cart_unload ||
+	( ioctl_ram_wr &&
+		(((rom_download || prg_download) && !ioctl_internal_memory_wr) ||
+		(megacart_download || tap_download))
+	);
+
+wire sdram_oe;
+assign sdram_oe = p2_h ? mc_sdram_en & mc_sdram_wr_n : tap_sdram_oe;
+
+wire [1:0] sdram_bank;
+assign sdram_bank = {mc_nvram_sel,mc_rom_sel | megacart_download};
 
 sdram ram
 (
@@ -419,12 +557,12 @@ sdram ram
     .clkref(ioctl_download ? ioctl_wr : p2_h),
     .init(~pll_locked),
     .clk(clk_sys),
-    .bank(2'b00),
+    .bank(sdram_bank),
     .dout(sdram_out),
-    .din ((rom_download | prg_download | tap_download) ? ioctl_dout : sdram_in),
+    .din (sdram_in),
     .addr(sdram_a),
-    .we((sdram_en & ~sdram_wr_n) || ((rom_download || prg_download) && !ioctl_internal_memory_wr && ioctl_ram_wr) || (tap_download && ioctl_ram_wr) || cart_unload),
-    .oe(p2_h ? sdram_en & sdram_wr_n : tap_sdram_oe)
+    .we(sdram_we),
+    .oe(sdram_oe)
 );
 
 //////////////////  PRG/ROM/TAP LOAD //////////////
@@ -437,6 +575,7 @@ wire  [7:0] ioctl_index;
 wire        rom_download = ioctl_download && !ioctl_index;
 wire        prg_download = ioctl_download && (ioctl_index == 8'h01 || ioctl_index == 8'h41);
 wire        tap_download = ioctl_download && ioctl_index == 8'h81;
+wire        megacart_download = ioctl_download && (ioctl_index==8'h02);
 reg   [4:0] ioctl_reg_inject_state = 0;
 wire [22:0] ioctl_target_addr;
 reg  [22:0] ioctl_tap_addr;
@@ -461,14 +600,15 @@ data_io data_io (
 );
 
 always_comb begin
-    casex ({tap_download, rom_download, ioctl_addr[15:13]})
-        'bX1_00X: ioctl_target_addr = {7'h0, 2'b00, ioctl_addr[13:0]}; //1541
-        'bX1_010: ioctl_target_addr = {7'h0, 3'b111, ioctl_addr[12:0]}; //kernal pal
-        'bX1_011: ioctl_target_addr = {7'h1, 3'b111, ioctl_addr[12:0]}; //kernal ntsc
-        'bX1_100: ioctl_target_addr = {7'h0, 3'b110, ioctl_addr[12:0]}; //basic
-        'bX1_101: ioctl_target_addr = {7'h0, 4'b1000, ioctl_addr[11:0]}; //character
-        'b00_XXX: ioctl_target_addr = {7'h0, ioctl_reg_inject_state ? ioctl_reg_addr : ioctl_prg_addr};
-        'b10_XXX: ioctl_target_addr = ioctl_tap_addr;
+    casex ({megacart_download , tap_download, rom_download, ioctl_addr[15:13]})
+        'b0X1_00X: ioctl_target_addr = {7'h0, 2'b00, ioctl_addr[13:0]}; //1541
+        'b0X1_010: ioctl_target_addr = {7'h0, 3'b111, ioctl_addr[12:0]}; //kernal pal
+        'b0X1_011: ioctl_target_addr = {7'h1, 3'b111, ioctl_addr[12:0]}; //kernal ntsc
+        'b0X1_100: ioctl_target_addr = {7'h0, 3'b110, ioctl_addr[12:0]}; //basic
+        'b0X1_101: ioctl_target_addr = {7'h0, 4'b1000, ioctl_addr[11:0]}; //character
+        'b000_XXX: ioctl_target_addr = {7'h0, ioctl_reg_inject_state ? ioctl_reg_addr : ioctl_prg_addr};
+        'b010_XXX: ioctl_target_addr = ioctl_tap_addr;
+        'b100_XXX: ioctl_target_addr = ioctl_addr[22:0];
          default: ioctl_target_addr = 0;
     endcase;
 end
@@ -483,10 +623,12 @@ wire ioctl_internal_memory_wr =
 
 always @(posedge clk_sys) begin
     reg old_prg_download;
+    reg old_mc_download;
     reg auto_reset;
 
     force_reset <= 0;
     old_prg_download <= prg_download;
+    old_mc_download <= megacart_download;
     ioctl_ram_wr <= 0;
     if (prg_download && ioctl_wr) begin
         if (~st_crt_no_load_address) begin //cart/prg loading with address in the first 2 bytes
@@ -509,6 +651,8 @@ always @(posedge clk_sys) begin
         ioctl_ram_wr <= 1;
     end
     if (rom_download) ioctl_ram_wr <= ioctl_wr;
+    if (megacart_download) ioctl_ram_wr <= ioctl_wr;
+    if (old_mc_download & ~megacart_download) force_reset<=1'b1;
 
     //prg download ended, adjust registers
     if (old_prg_download & ~prg_download) ioctl_reg_inject_state <= 1;
@@ -522,7 +666,7 @@ always @(posedge clk_sys) begin
 		11: begin ioctl_reg_addr <= 16'h32; ioctl_reg_data <= ioctl_prg_addr[15:8]; ioctl_ram_wr <= 1; end
 		13: begin ioctl_reg_addr <= 16'hae; ioctl_reg_data <= ioctl_prg_addr[7:0];  ioctl_ram_wr <= 1; end
 		15: begin ioctl_reg_addr <= 16'haf; ioctl_reg_data <= ioctl_prg_addr[15:8]; ioctl_ram_wr <= 1; end
-        31: begin force_reset <= auto_reset; auto_reset <= 0; end
+		31: begin force_reset <= auto_reset; auto_reset <= 0; end
     endcase
 
     if (ioctl_reg_inject_state) ioctl_reg_inject_state <= ioctl_reg_inject_state + 1'd1;
@@ -594,14 +738,14 @@ c1530 c1530
 
 wire [15:0] vic_audio, vic_audio_filtered;
 wire [15:0] audio_sel = st_audio_filter ? vic_audio_filtered : vic_audio;
-wire [15:0] cass_audio = { (~cass_read | (cass_write & ~cass_motor & ~cass_sense)), 12'd0 };  // silence cass_write when motor is off because bit is in common with keyboard
-wire [15:0] audio_out = st_tape_sound ? audio_sel + cass_audio : audio_sel;
+wire [15:0] cass_audio = { 1'd0, (~cass_read | (cass_write & ~cass_motor & ~cass_sense)), 11'd0 };  // silence cass_write when motor is off because bit is in common with keyboard
+wire [16:0] audio_out = st_tape_sound ? audio_sel + cass_audio : audio_sel;
 
 sigma_delta_dac #(15) dac_l
 (
     .CLK(clk_sys),
     .RESET(reset),
-    .DACin(audio_sel),
+    .DACin(audio_out[16] ? 16'hffff : audio_out),
     .DACout(AUDIO_L)
 );
 
@@ -609,7 +753,7 @@ sigma_delta_dac #(15) dac_r
 (
     .CLK(clk_sys),
     .RESET(reset),
-    .DACin(audio_out),
+    .DACin(audio_out[16] ? 16'hffff : audio_out),
     .DACout(AUDIO_R)
 );
 //////////////////   VIDEO   //////////////////
@@ -645,7 +789,7 @@ mist_video #(.COLOR_DEPTH(4), .OSD_COLOR(3'd5), .SD_HCNT_WIDTH(10)) mist_video (
     // Rotate OSD [0] - rotate [1] - left or right
     .rotate      ( 2'b00      ),
     // composite-like blending
-    .blend       ( 1'b0       ),
+    .blend       ( st_blend   ),
 
     // video in
     .R           ( R_O        ),
@@ -692,7 +836,7 @@ always @(posedge clk_1541) begin
 	c1541_reset_32_d<=c1541_reset;
 	c1541_reset_32<=c1541_reset_32_d;
 end
-	
+
 c1541_sd c1541_sd (
     .clk32 ( clk_1541 ),
     .reset ( c1541_reset_32 ),
@@ -707,14 +851,15 @@ c1541_sd c1541_sd (
     .iec_data_o ( c1541_iec_data_o ),
     .iec_clk_o  ( c1541_iec_clk_o ),
 
-    .sd_lba         ( sd_lba         ),
-    .sd_rd          ( sd_rd          ),
-    .sd_wr          ( sd_wr          ),
-    .sd_ack         ( sd_ack         ),
-    .sd_buff_din    ( sd_din         ),
+    .sd_lba         ( sd_lba_1541    ),
+    .sd_rd          ( sd_rd_1541     ),
+    .sd_wr          ( sd_wr_1541     ),
+    .sd_ack         ( sd_ack_1541    ),
+    .sd_buff_din    ( sd_din_1541    ),
     .sd_buff_dout   ( sd_dout        ),
-    .sd_buff_wr     ( sd_dout_strobe ),
+    .sd_buff_wr     ( sd_strobe_1541 ),
     .sd_buff_addr   ( sd_buff_addr   ),
+    .sd_busy_o      ( sd_busy_1541   ),
     .led            ( led_disk       ),
 
     .c1541rom_clk   ( clk_sys         ),
