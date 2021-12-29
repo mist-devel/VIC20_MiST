@@ -63,6 +63,7 @@ entity VIC20 is
     i_sysclk              : in    std_logic;  -- comes from CLK_A via DCM (divided by 4)
     i_sysclk_en           : in    std_logic;  -- 8.867236 MHz (PAL),
                                               -- 7.15909 (NTSC) enable signal
+    i_pause               : in    std_logic;  -- Pause CPU while loading ROMS. 
     i_reset               : in    std_logic;
     i_pal                 : in    std_logic;
     -- serial bus pins
@@ -333,7 +334,7 @@ begin
       port map (
           Mode    => "00",
           Res_n   => reset_l_sampled,
-          Enable  => c_ena,
+          Enable  => c_ena and not i_pause,
           Clk     => i_sysclk,
           Rdy     => '1',
           Abort_n => '1',

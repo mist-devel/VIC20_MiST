@@ -23,7 +23,6 @@ module megacart
 	input active,
 	input [15:0] vic_addr,
 	input vic_wr_n,
-	input vic_sdram_en,
 	input vic_io2_sel,
 	input vic_io3_sel,
 	input vic_blk123_sel,
@@ -35,7 +34,6 @@ module megacart
 	output mc_wr_n,
 	output mc_rom_sel,
 	output mc_nvram_sel,
-	output mc_sdram_en,
 	output reg mc_qm,
 	output mc_soft_reset
 );
@@ -115,16 +113,12 @@ wire mc_lowram_sel = (!nvram_ena_l & vic_ram123_sel);
 // NVRAM is selected in io2/3 + ram123 blocks if nvram_ena_l is low
 assign mc_nvram_sel = active & (vic_ram123_sel | vic_io2_sel | vic_io3_sel);
 
-// Output modified bus signals.
-// Firstly, the write signal - if ram_wp is low we block writes to RAM
+// Output modified write signal.
+// If ram_wp is low we block writes to RAM
 // but still let through writes to NVRAM if nvram is enabled.
 assign mc_wr_n = active ? vic_wr_n | (mc_ram_sel & !ram_wp_n) | (nvram_ena_l & mc_nvram_sel)
 						: vic_wr_n;
-
-// sdram_enable
-// Add io2&3 to regions which access SDRAM
-assign mc_sdram_en = vic_sdram_en | (!nvram_ena_l & mc_nvram_sel & active);						
-						
+					
 // Address mapping:
 // 
 assign mc_addr = rom_high_sel ? {3'b001,eff_bank_high,vic_addr[12:0]} :
@@ -148,7 +142,11 @@ end
 
 // IO3, 0x9c00 -> 0x9fff
 // (If nvram is enabled, writes here also go to nvram)
+
+reg active_d;
+
 always @(posedge clk) begin
+	active_d<=active;
 	if(!reset_n) begin
 		nvram_ena_l<=1'b0;
 	end
@@ -163,6 +161,8 @@ always @(posedge clk) begin
 		if(vic_addr[9])
 			soft_reset<=1'b1;
 	end
+	if(active!=active_d)	// Reset any time the megacart's status changes.
+		soft_reset<=1'b1;
 end
 assign mc_soft_reset = soft_reset;
 

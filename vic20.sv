@@ -384,7 +384,8 @@ wire [7:0] from_vic;
 vic20 #(.I_EXTERNAL_ROM(1'b1)) VIC20
 (
     .I_SYSCLK(clk_sys),
-    .I_SYSCLK_EN(clk8m & ~ioctl_download),
+    .I_SYSCLK_EN(clk8m),
+    .I_PAUSE(ioctl_download),
     .I_RESET(reset | mc_reset),
     .I_PAL(~st_ntsc),
 
@@ -472,16 +473,15 @@ wire mc_sdram_wr_n;
 wire mc_rom_sel;
 wire mc_nvram_sel;
 wire mc_qm;
-wire mc_sdram_en;
 
 megacart mc
 (
 	.clk(clk_sys),
-	.reset_n(pll_locked & !st_reset),
+	.reset_n(pll_locked & !st_reset & !force_reset),
 	.active(st_megacart),
 	.vic_addr(sdram_vic20_a),
 	.vic_wr_n(vic_wr_n),
-	.vic_sdram_en(sdram_en),
+//	.vic_sdram_en(sdram_en),
 	.vic_io2_sel(vic_io2_sel),
 	.vic_io3_sel(vic_io3_sel),
 	.vic_blk123_sel(vic_blk123_sel),
@@ -494,7 +494,7 @@ megacart mc
 	.mc_rom_sel(mc_rom_sel),
 	.mc_nvram_sel(mc_nvram_sel),
 	.mc_qm(mc_qm),
-	.mc_sdram_en(mc_sdram_en),
+//	.mc_sdram_en(mc_sdram_en),
 	.mc_soft_reset(mc_reset)
 );
 
@@ -538,7 +538,7 @@ assign sdram_in =
 		: from_vic;
 
 wire sdram_we;
-assign sdram_we = (mc_sdram_en & ~mc_sdram_wr_n) || // Write originates from VIC20
+assign sdram_we = (sdram_en & ~mc_sdram_wr_n) || // Write originates from VIC20
 	cart_unload ||
 	( ioctl_ram_wr &&
 		(((rom_download || prg_download) && !ioctl_internal_memory_wr) ||
@@ -546,7 +546,7 @@ assign sdram_we = (mc_sdram_en & ~mc_sdram_wr_n) || // Write originates from VIC
 	);
 
 wire sdram_oe;
-assign sdram_oe = p2_h ? mc_sdram_en & mc_sdram_wr_n : tap_sdram_oe;
+assign sdram_oe = p2_h ? sdram_en & mc_sdram_wr_n : tap_sdram_oe;
 
 wire [1:0] sdram_bank;
 assign sdram_bank = {mc_nvram_sel,mc_rom_sel | megacart_download};
