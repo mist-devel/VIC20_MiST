@@ -825,7 +825,7 @@ wire c1541_iec_clk_o;
 
 reg disk_present;
 always @(posedge clk_1541)
-	disk_present=|img_size;
+	disk_present <= |img_size;
 
 reg c1541_reset_32_d;
 reg c1541_reset_32;
@@ -841,7 +841,7 @@ c1541_sd c1541_sd (
     .clk32 ( clk_1541 ),
     .reset ( c1541_reset_32 ),
 
-    .disk_change ( img_mounted ),
+    .disk_change ( img_mounted[0] ),
     .disk_mount ( disk_present),
     .disk_num ( 10'd0 ), // always 0 on MiST, the image is selected by the OSD menu
 
