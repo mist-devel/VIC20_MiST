@@ -505,10 +505,10 @@ megacart_nvram nvr
 	// VIC20 interface
 	.clk_a          ( clk_sys         ),
 	.reset_n        ( pll_locked & !st_reset ),
-	.a_a            (sdram_vic20_a    ),
+	.a_a            ( sdram_vic20_a   ),
 	.d_a            ( from_vic        ),
 	.q_a            ( mc_nvram_out    ),
-	.we_a           ( mc_nvram_sel & ~vic_wr_n ),
+	.we_a           ( mc_nvram_sel & ~mc_sdram_wr_n ),
 	// UserIO interface
 	.clk_b          ( clk_1541        ),
 	.readnv         ( img_mounted[1]  ),

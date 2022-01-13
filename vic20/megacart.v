@@ -116,8 +116,8 @@ assign mc_nvram_sel = active & (vic_ram123_sel | vic_io2_sel | vic_io3_sel);
 // Output modified write signal.
 // If ram_wp is low we block writes to RAM
 // but still let through writes to NVRAM if nvram is enabled.
-assign mc_wr_n = active ? vic_wr_n | (mc_ram_sel & !ram_wp_n) | (nvram_ena_l & mc_nvram_sel)
-						: vic_wr_n;
+wire mc_wr_en = (mc_ram_sel & ram_wp_n) | (!nvram_ena_l & mc_nvram_sel);
+assign mc_wr_n = active ? vic_wr_n | !mc_wr_en : vic_wr_n;
 					
 // Address mapping:
 // 
