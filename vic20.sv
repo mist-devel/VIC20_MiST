@@ -477,7 +477,7 @@ wire mc_qm;
 megacart mc
 (
 	.clk(clk_sys),
-	.reset_n(pll_locked & !st_reset & !force_reset),
+	.reset_n(pll_locked & !st_cart_unload & !force_reset),
 	.active(st_megacart),
 	.vic_addr(sdram_vic20_a),
 	.vic_wr_n(vic_wr_n),
@@ -504,7 +504,7 @@ megacart_nvram nvr
 (
 	// VIC20 interface
 	.clk_a          ( clk_sys         ),
-	.reset_n        ( pll_locked & !st_reset ),
+	.reset_n        ( pll_locked & !st_cart_unload ),
 	.a_a            ( sdram_vic20_a   ),
 	.d_a            ( from_vic        ),
 	.q_a            ( mc_nvram_out    ),
