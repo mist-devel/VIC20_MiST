@@ -248,7 +248,6 @@ architecture RTL of M6561 is
   signal char_loadD2      : std_logic;
   signal char_loadD3      : std_logic;
   signal char_loadD4      : std_logic;
-  signal char_loadD5      : std_logic;
   signal doing_cell       : std_logic;
   signal cell_addr        : std_logic_vector(13 downto 0);
 
@@ -689,7 +688,6 @@ begin
         char_loadD2 <= char_loadD;
         char_loadD3 <= char_loadD2;
         char_loadD4 <= char_loadD3;
-        char_loadD5 <= char_loadD4;
 
         if char_loadD4 = '1' then
           op_cnt <= op_cnt_r;
@@ -743,7 +741,7 @@ begin
   end if;
   end process;
 
-  p_char_decode : process(op_cnt, op_multi, bit_sel, bit_sel_m, r_reverse_mode)
+  p_char_decode : process(op_cnt, op_multi, bit_sel, bit_sel_m, r_reverse_mode, border_n)
   begin
     -- bit_sel_m codes
     -- 00 background colour
