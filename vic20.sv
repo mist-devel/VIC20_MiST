@@ -23,46 +23,114 @@
 
 module vic20_mist
 (
-   input         CLOCK_27[0],   // Input clock 27 MHz
+	input         CLOCK_27,
+`ifdef USE_CLOCK_50
+	input         CLOCK_50,
+`endif
 
-   output  [5:0] VGA_R,
-   output  [5:0] VGA_G,
-   output  [5:0] VGA_B,
-   output        VGA_HS,
-   output        VGA_VS,
+	output        LED,
+	output [VGA_BITS-1:0] VGA_R,
+	output [VGA_BITS-1:0] VGA_G,
+	output [VGA_BITS-1:0] VGA_B,
+	output        VGA_HS,
+	output        VGA_VS,
 
-   output        LED,
+	input         SPI_SCK,
+	inout         SPI_DO,
+	input         SPI_DI,
+	input         SPI_SS2,    // data_io
+	input         SPI_SS3,    // OSD
+	input         CONF_DATA0, // SPI_SS for user_io
 
-   output        AUDIO_L,
-   output        AUDIO_R,
+`ifdef USE_QSPI
+	input         QSCK,
+	input         QCSn,
+	inout   [3:0] QDAT,
+`endif
+`ifndef NO_DIRECT_UPLOAD
+	input         SPI_SS4,
+`endif
 
-   input         SPI_SCK,
-   output        SPI_DO,
-   input         SPI_DI,
-   input         SPI_SS2,
-   input         SPI_SS3,
-   input         CONF_DATA0,
+	output [12:0] SDRAM_A,
+	inout  [15:0] SDRAM_DQ,
+	output        SDRAM_DQML,
+	output        SDRAM_DQMH,
+	output        SDRAM_nWE,
+	output        SDRAM_nCAS,
+	output        SDRAM_nRAS,
+	output        SDRAM_nCS,
+	output  [1:0] SDRAM_BA,
+	output        SDRAM_CLK,
+	output        SDRAM_CKE,
 
-   output [12:0] SDRAM_A,
-   inout  [15:0] SDRAM_DQ,
-   output        SDRAM_DQML,
-   output        SDRAM_DQMH,
-   output        SDRAM_nWE,
-   output        SDRAM_nCAS,
-   output        SDRAM_nRAS,
-   output        SDRAM_nCS,
-   output  [1:0] SDRAM_BA,
-   output        SDRAM_CLK,
-   output        SDRAM_CKE,
+`ifdef DUAL_SDRAM
+	output [12:0] SDRAM2_A,
+	inout  [15:0] SDRAM2_DQ,
+	output        SDRAM2_DQML,
+	output        SDRAM2_DQMH,
+	output        SDRAM2_nWE,
+	output        SDRAM2_nCAS,
+	output        SDRAM2_nRAS,
+	output        SDRAM2_nCS,
+	output  [1:0] SDRAM2_BA,
+	output        SDRAM2_CLK,
+	output        SDRAM2_CKE,
+`endif
 
-   input         UART_RX,
-   output        UART_TX
+	output        AUDIO_L,
+	output        AUDIO_R,
+`ifdef I2S_AUDIO
+	output        I2S_BCK,
+	output        I2S_LRCK,
+	output        I2S_DATA,
+`endif
+`ifdef USE_AUDIO_IN
+	input         AUDIO_IN,
+`endif
+	input         UART_RX,
+	output        UART_TX
+
 );
+
+`ifdef NO_DIRECT_UPLOAD
+localparam bit DIRECT_UPLOAD = 0;
+wire SPI_SS4 = 1;
+`else
+localparam bit DIRECT_UPLOAD = 1;
+`endif
+
+`ifdef USE_QSPI
+localparam bit QSPI = 1;
+assign QDAT = 4'hZ;
+`else
+localparam bit QSPI = 0;
+`endif
+
+`ifdef VGA_8BIT
+localparam VGA_BITS = 8;
+`else
+localparam VGA_BITS = 6;
+`endif
+
+// remove this if the 2nd chip is actually used
+`ifdef DUAL_SDRAM
+assign SDRAM2_A = 13'hZZZZ;
+assign SDRAM2_BA = 0;
+assign SDRAM2_DQML = 0;
+assign SDRAM2_DQMH = 0;
+assign SDRAM2_CKE = 0;
+assign SDRAM2_CLK = 0;
+assign SDRAM2_nCS = 1;
+assign SDRAM2_DQ = 16'hZZZZ;
+assign SDRAM2_nCAS = 1;
+assign SDRAM2_nRAS = 1;
+assign SDRAM2_nWE = 1;
+`endif
+
+`include "build_id.v"
 
 assign LED = ~ioctl_download & ~led_disk & cass_motor;
 assign UART_TX = ~cass_motor;
-
-`include "build_id.v"
 
 localparam TAP_MEM_START = 22'h20000;
 
@@ -100,6 +168,19 @@ always @(posedge clk_sys) begin
 	uart_rxD <= UART_RX;
 	uart_rxD2 <= uart_rxD;
 end
+
+wire ear_input;
+`ifdef USE_AUDIO_IN
+reg ainD;
+reg ainD2;
+always @(posedge clk_sys) begin
+        ainD <= AUDIO_IN;
+        ainD2 <= ainD;
+end
+assign ear_input = ainD2;
+`else
+assign ear_input = uart_rxD2;
+`endif
 
 ////////////////////   CLOCKS   ///////////////////
 wire clk_sys;
@@ -176,7 +257,7 @@ pll_reconfig pll_reconfig_inst
 
 pll_vic20 pll_vic20
 (
-    .inclk0(CLOCK_27[0]),
+    .inclk0(CLOCK_27),
     .c0(clk_sys),  //35.48 MHz PAL, 28.63 MHz NTSC
     .areset(pll_areset),
     .scanclk(pll_scanclk),
@@ -230,14 +311,14 @@ end
 
 pll27 pll
 (
-    .inclk0(CLOCK_27[0]),
+    .inclk0(CLOCK_27),
     .c0(clk_32) //32 MHz
 );
 
 always @(posedge clk_sys) begin
     reg [4:0] sys_count;
-    clk8m <= !sys_count[1:0];
-    clk_ref <= !sys_count;
+    clk8m <= ~|sys_count[1:0];
+    clk_ref <= ~|sys_count[3:0];
     sys_count <= sys_count + 1'd1;
 
     reset <= st_reset | st_cart_unload | buttons[1] | rom_download | force_reset | fn_keys[10] | ~pll_locked;
@@ -732,7 +813,7 @@ c1530 c1530
     .cass_motor(cass_motor),
     .cass_sense(cass_sense),
     .osd_play_stop_toggle(st_tap_play_btn | fn_keys[9]),
-    .ear_input(uart_rxD2)
+    .ear_input(ear_input)
 );
 //////////////////   AUDIO   //////////////////
 
@@ -766,7 +847,7 @@ wire        VS_O;
 
 wire        hs,vs;
 
-mist_video #(.COLOR_DEPTH(4), .OSD_COLOR(3'd5), .SD_HCNT_WIDTH(10)) mist_video (
+mist_video #(.COLOR_DEPTH(4), .OSD_COLOR(3'd5), .SD_HCNT_WIDTH(10), .OUT_COLOR_DEPTH(VGA_BITS)) mist_video (
     .clk_sys     ( clk_sys    ),
 
     // OSD SPI interface

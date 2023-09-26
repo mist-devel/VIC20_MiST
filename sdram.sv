@@ -39,7 +39,7 @@ module sdram
 	input             init,			// init signal after FPGA config to initialize RAM
 	input             clk,			// sdram is accessed at up to 128MHz
 	input             clkref,		// reference clock to sync to
-	
+
 	input       [1:0] bank,
 	input       [7:0] din,			// data input from chipset/cpu
 	output      [7:0] dout,			// data output to chipset/cpu
@@ -105,13 +105,13 @@ localparam MODE_LDM    = 2'b10;
 localparam MODE_PRE    = 2'b11;
 
 // initialization 
-reg [1:0] mode;
-always @(posedge clk) begin
-	reg [4:0] reset=5'h1f;
-	reg init_old=0;
-	init_old <= init;
-
-	if(init_old & ~init) reset <= 5'h1f;
+reg [1:0] mode=MODE_RESET;
+reg [4:0] reset=5'h1f;
+always @(posedge clk, posedge init) begin
+	if (init) begin
+		reset <= 5'h1f;
+		mode <= MODE_RESET;
+	end
 	else if(q == STATE_LAST) begin
 		if(reset != 0) begin
 			reset <= reset - 5'd1;
@@ -162,10 +162,14 @@ always @(posedge clk) begin
 		                          default: SDRAM_A <= 13'b0000000000000;
 	endcase
 
+	SDRAM_DQ <= 16'bZZZZZZZZZZZZZZZZ;
+
 	if(q == STATE_START) begin
 		SDRAM_BA <= (mode == MODE_NORMAL) ? bank : 2'b00;
-		SDRAM_DQ <= wr ? {din, din} : 16'bZZZZZZZZZZZZZZZZ;
 		{SDRAM_DQMH,SDRAM_DQML} <= {~a[0] & wr,a[0] & wr};
+	end
+
+	if (q == STATE_CONT) begin
 		if(wr) SDRAM_DQ <= { din, din };
 	end
 
