@@ -111,20 +111,23 @@ architecture RTL of M6561 is
   constant PAL_TOTAL_LINES_M1      : std_logic_vector(8 downto 0) := "100110111"; -- 312 -1
   constant PAL_H_START_M1          : std_logic_vector(8 downto 0) := "000101011"; -- 44 -1
   constant PAL_H_END_M1            : std_logic_vector(8 downto 0) := "100001111"; -- 272 -1 -- width: 228
-  constant PAL_V_START             : std_logic_vector(8 downto 0) := "000011100"; -- 28
+  constant PAL_V_START             : std_logic_vector(8 downto 0) := "000011010"; -- 26
+  constant PAL_V_END               : std_logic_vector(8 downto 0) := "100110101"; -- 310 -1
   -- video size 228 pixels by 284 lines (PAL)
 
   constant NTSC_CLOCKS_PER_LINE_M1 : std_logic_vector(8 downto 0) := "100000011"; -- 260 -1
   constant NTSC_TOTAL_LINES_M1     : std_logic_vector(8 downto 0) := "100000100"; -- 260 (not -1)
   constant NTSC_H_START_M1         : std_logic_vector(8 downto 0) := "000100101"; -- 38 -1
   constant NTSC_H_END_M1           : std_logic_vector(8 downto 0) := "011110111"; -- 248 -1 -- width: 210
-  constant NTSC_V_START            : std_logic_vector(8 downto 0) := "000010000"; -- 16
+  constant NTSC_V_START            : std_logic_vector(8 downto 0) := "000001110"; -- 14
+  constant NTSC_V_END              : std_logic_vector(8 downto 0) := "100000001"; -- 260 -1
 
   signal CLOCKS_PER_LINE_M1        : std_logic_vector(8 downto 0);
   signal TOTAL_LINES_M1            : std_logic_vector(8 downto 0);
   signal H_START_M1                : std_logic_vector(8 downto 0);
   signal H_END_M1                  : std_logic_vector(8 downto 0);
   signal V_START                   : std_logic_vector(8 downto 0);
+  signal V_END                     : std_logic_vector(8 downto 0);
 
   -- close to original                               RGB
   constant col0 : std_logic_vector(11 downto 0) := x"000";  -- 0 - 0000   Black
@@ -305,6 +308,7 @@ begin
   H_START_M1         <= PAL_H_START_M1         when I_PAL = '1' else NTSC_H_START_M1;
   H_END_M1           <= PAL_H_END_M1           when I_PAL = '1' else NTSC_H_END_M1;
   V_START            <= PAL_V_START            when I_PAL = '1' else NTSC_V_START;
+  V_END              <= PAL_V_END              when I_PAL = '1' else NTSC_V_END;
   -- clocking
   p2_h_int     <= not hcnt(1);
   O_P2_H_RISE    <= '1' when I_ENA_4 = '1' and hcnt(1 downto 0) = "11" else '0';
@@ -488,7 +492,7 @@ begin
           hsync <= '0';
         end if;
         if do_hsync then
-          if v_cnt_last then
+          if (vcnt = V_END) then
             vblank <= '1';
           elsif (vcnt = V_START) then
             vblank <= '0';

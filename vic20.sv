@@ -1,6 +1,6 @@
 //============================================================================
 // 
-//  VIC20 replica for MiST
+//  VIC20 replica for MiST Top-level
 //  Copyright (C) 2018 György Szombathelyi
 //
 //  This program is free software; you can redistribute it and/or modify it
@@ -34,6 +34,20 @@ module vic20_mist
 	output [VGA_BITS-1:0] VGA_B,
 	output        VGA_HS,
 	output        VGA_VS,
+
+`ifdef USE_HDMI
+	output        HDMI_RST,
+	output  [7:0] HDMI_R,
+	output  [7:0] HDMI_G,
+	output  [7:0] HDMI_B,
+	output        HDMI_HS,
+	output        HDMI_VS,
+	output        HDMI_PCLK,
+	output        HDMI_DE,
+	inout         HDMI_SDA,
+	inout         HDMI_SCL,
+	input         HDMI_INT,
+`endif
 
 	input         SPI_SCK,
 	inout         SPI_DO,
@@ -84,6 +98,9 @@ module vic20_mist
 	output        I2S_LRCK,
 	output        I2S_DATA,
 `endif
+`ifdef SPDIF_AUDIO
+	output        SPDIF,
+`endif
 `ifdef USE_AUDIO_IN
 	input         AUDIO_IN,
 `endif
@@ -110,6 +127,21 @@ localparam bit QSPI = 0;
 localparam VGA_BITS = 8;
 `else
 localparam VGA_BITS = 6;
+`endif
+
+`ifdef USE_HDMI
+localparam bit HDMI = 1;
+assign HDMI_RST = 1'b1;
+`else
+localparam bit HDMI = 0;
+`endif
+
+`ifdef BIG_OSD
+localparam bit BIG_OSD = 1;
+`define SEP "-;",
+`else
+localparam bit BIG_OSD = 0;
+`define SEP
 `endif
 
 // remove this if the 2nd chip is actually used
@@ -139,6 +171,7 @@ localparam CONF_STR =
     "VIC20;PRGCRTTAP;",
     "S0U,D64,Mount Disk;",
     "TC,Play/Stop TAP;",
+    `SEP
     "P1,Memory configuration;",
     "P1O78,Cartridge ,Off,ROM,RAM;",
     "P1O2,CRT with load address,Yes,No;",
@@ -155,6 +188,7 @@ localparam CONF_STR =
     "P3OE,Composite blend,Off,On;",
     "P3OD,Tape sound,Off,On;",
     "P3O9,Audio Filter,On,Off;",
+    `SEP
     "T0,Reset;",
     "T1,Reset with cart unload;",
     "V,v1.0.",`BUILD_DATE
@@ -392,7 +426,18 @@ wire sd_strobe_nvram, sd_strobe_1541;
 assign sd_strobe_nvram = uio_sel_nvram ? sd_dout_strobe : 1'b0;
 assign sd_strobe_1541 = uio_sel_nvram ? 1'b0 : sd_dout_strobe;
 
-user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
+`ifdef USE_HDMI
+wire        i2c_start;
+wire        i2c_read;
+wire  [6:0] i2c_addr;
+wire  [7:0] i2c_subaddr;
+wire  [7:0] i2c_dout;
+wire  [7:0] i2c_din;
+wire        i2c_ack;
+wire        i2c_end;
+`endif
+
+user_io #(.STRLEN($size(CONF_STR)>>3), .SD_IMAGES(2), .FEATURES(32'h0 | (BIG_OSD << 13) | (HDMI << 14))) user_io
 (
     .clk_sys(clk_sys),
     .clk_sd(clk_1541),
@@ -413,7 +458,18 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
     .joystick_1(joystick_1),
     .ps2_kbd_clk(ps2Clk),
     .ps2_kbd_data(ps2Data),
-    
+
+`ifdef USE_HDMI
+    .i2c_start      (i2c_start      ),
+    .i2c_read       (i2c_read       ),
+    .i2c_addr       (i2c_addr       ),
+    .i2c_subaddr    (i2c_subaddr    ),
+    .i2c_dout       (i2c_dout       ),
+    .i2c_din        (i2c_din        ),
+    .i2c_ack        (i2c_ack        ),
+    .i2c_end        (i2c_end        ),
+`endif
+
     .sd_lba(sd_lba),
     .sd_rd(sd_rd),
     .sd_wr(sd_wr),
@@ -477,7 +533,7 @@ vic20 #(.I_EXTERNAL_ROM(1'b1)) VIC20
     .O_VIDEO_B(B_O),
     .O_HSYNC(HS_O),
     .O_VSYNC(VS_O),
-//    .O_DE     => core_blankn_s,
+    .O_DE(DE_O),
 
     .atn_o(vic20_iec_atn_o),
     .clk_o(vic20_iec_clk_o),
@@ -837,6 +893,34 @@ sigma_delta_dac #(15) dac_r
     .DACin(audio_out[16] ? 16'hffff : audio_out),
     .DACout(AUDIO_R)
 );
+
+wire [31:0] vic20_clk_rate = st_ntsc ? 32'd28_630_000 : 32'd35_480_000;
+
+`ifdef I2S_AUDIO
+i2s i2s (
+	.reset(1'b0),
+	.clk(clk_sys),
+	.clk_rate(vic20_clk_rate),
+
+	.sclk(I2S_BCK),
+	.lrclk(I2S_LRCK),
+	.sdata(I2S_DATA),
+
+	.left_chan(audio_out[16] ? 16'h7fff : {~audio_out[15], audio_out[14:0]}),
+	.right_chan(audio_out[16] ? 16'h7fff : {~audio_out[15], audio_out[14:0]})
+);
+`endif
+
+`ifdef SPDIF_AUDIO
+spdif spdif
+(
+	.clk_i(clk_sys),
+	.rst_i(reset),
+	.clk_rate_i(vic20_clk_rate),
+	.spdif_o(SPDIF),
+	.sample_i({2{audio_out[16] ? 16'h7fff : {~audio_out[15], audio_out[14:0]}}})
+);
+`endif
 //////////////////   VIDEO   //////////////////
 
 wire  [3:0] R_O;
@@ -844,10 +928,11 @@ wire  [3:0] G_O;
 wire  [3:0] B_O;
 wire        HS_O;
 wire        VS_O;
+wire        DE_O;
 
 wire        hs,vs;
 
-mist_video #(.COLOR_DEPTH(4), .OSD_COLOR(3'd5), .SD_HCNT_WIDTH(10), .OUT_COLOR_DEPTH(VGA_BITS)) mist_video (
+mist_video #(.COLOR_DEPTH(4), .OSD_COLOR(3'd5), .SD_HCNT_WIDTH(10), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mist_video (
     .clk_sys     ( clk_sys    ),
 
     // OSD SPI interface
@@ -892,6 +977,70 @@ mist_video #(.COLOR_DEPTH(4), .OSD_COLOR(3'd5), .SD_HCNT_WIDTH(10), .OUT_COLOR_D
 wire   cs = ~(~HS_O | ~VS_O);
 assign VGA_HS = (~no_csync & scandoubler_disable & ~ypbpr) ? cs : hs;
 assign VGA_VS = (~no_csync & scandoubler_disable & ~ypbpr) ? 1'b1 : vs;
+
+`ifdef USE_HDMI
+i2c_master #(35_480_000) i2c_master (
+	.CLK         (clk_sys),
+	.I2C_START   (i2c_start),
+	.I2C_READ    (i2c_read),
+	.I2C_ADDR    (i2c_addr),
+	.I2C_SUBADDR (i2c_subaddr),
+	.I2C_WDATA   (i2c_dout),
+	.I2C_RDATA   (i2c_din),
+	.I2C_END     (i2c_end),
+	.I2C_ACK     (i2c_ack),
+
+	//I2C bus
+	.I2C_SCL     (HDMI_SCL),
+	.I2C_SDA     (HDMI_SDA)
+);
+
+mist_video #(.COLOR_DEPTH(4), .OSD_COLOR(3'd5), .SD_HCNT_WIDTH(10), .OUT_COLOR_DEPTH(8), .USE_BLANKS(1'b1), .BIG_OSD(BIG_OSD), .VIDEO_CLEANER(1'b1)) hdmi_video (
+    .clk_sys     ( clk_sys    ),
+
+    // OSD SPI interface
+    .SPI_SCK     ( SPI_SCK    ),
+    .SPI_SS3     ( SPI_SS3    ),
+    .SPI_DI      ( SPI_DI     ),
+
+    // scanlines (00-none 01-25% 10-50% 11-75%)
+    .scanlines   ( st_scanlines  ),
+
+    // non-scandoubled pixel clock divider 0 - clk_sys/4, 1 - clk_sys/2
+    .ce_divider  ( 1'b0       ),
+
+    // 0 = HVSync 31KHz, 1 = CSync 15KHz
+    .scandoubler_disable ( 1'b0 ),
+    // disable csync without scandoubler
+    .no_csync    ( 1'b1       ),
+    // YPbPr always uses composite sync
+    .ypbpr       ( 1'b0       ),
+    // Rotate OSD [0] - rotate [1] - left or right
+    .rotate      ( 2'b00      ),
+    // composite-like blending
+    .blend       ( st_blend   ),
+
+    // video in
+    .R           ( R_O        ),
+    .G           ( G_O        ),
+    .B           ( B_O        ),
+
+    .HSync       ( HS_O       ),
+    .VSync       ( VS_O       ),
+    .HBlank      ( ~DE_O      ),
+    .VBlank      ( ~VS_O      ),
+
+    // MiST video output signals
+    .VGA_R       ( HDMI_R     ),
+    .VGA_G       ( HDMI_G     ),
+    .VGA_B       ( HDMI_B     ),
+    .VGA_VS      ( HDMI_VS    ),
+    .VGA_HS      ( HDMI_HS    ),
+    .VGA_DE      ( HDMI_DE    )
+);
+assign HDMI_PCLK = clk_sys;
+
+`endif
 
 //////////////////   DISK   //////////////////
 
