@@ -98,6 +98,12 @@ module vic20_mist
 	output        I2S_LRCK,
 	output        I2S_DATA,
 `endif
+`ifdef I2S_AUDIO_HDMI
+	output        HDMI_MCLK,
+	output        HDMI_BCK,
+	output        HDMI_LRCK,
+	output        HDMI_SDATA,
+`endif
 `ifdef SPDIF_AUDIO
 	output        SPDIF,
 `endif
@@ -920,6 +926,14 @@ spdif spdif
 	.spdif_o(SPDIF),
 	.sample_i({2{audio_out[16] ? 16'h7fff : {~audio_out[15], audio_out[14:0]}}})
 );
+`ifdef I2S_AUDIO_HDMI
+assign HDMI_MCLK = 0;
+always @(posedge clk_sys) begin
+	HDMI_BCK <= I2S_BCK;
+	HDMI_LRCK <= I2S_LRCK;
+	HDMI_SDATA <= I2S_DATA;
+end
+`endif
 `endif
 //////////////////   VIDEO   //////////////////
 
