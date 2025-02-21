@@ -116,6 +116,9 @@ entity VIC20 is
 
     o_p2_h                : out   std_logic;
 
+    i_uart_rx             : in    std_logic;
+    o_uart_tx             : out   std_logic;
+
     -- you may leave this disconnected if not required
     debug                 : out   std_logic_vector(32 downto 0);  -- amount of channels of DLA (e.g. via aux_io)
     debugi                : in    std_logic_vector(2 downto 0);
@@ -287,9 +290,11 @@ begin
   -- <= reset_l_sampled;
 
   -- user port
-  user_port_cb1_in <= '1';
+  user_port_cb1_in <= i_uart_rx;
   user_port_cb2_in <= '1';
-  user_port_in <= x"FF";
+  user_port_in(7 downto 1) <= "1111111";
+  user_port_in(0) <= i_uart_rx;
+
   -- <= user_port_out
   -- <= user_port_out_oe_l
 
@@ -489,6 +494,7 @@ begin
 
     cb1_i       => user_port_cb1_in,
     cb2_i       => user_port_cb2_in,
+    cb2_o       => o_uart_tx,
 
     irq         => via1_nmi
   );

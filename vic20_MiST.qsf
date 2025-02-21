@@ -126,6 +126,8 @@ set_location_assignment PIN_66 -to SDRAM_nWE
 set_location_assignment PIN_59 -to SDRAM_nCS
 set_location_assignment PIN_33 -to SDRAM_CKE
 set_location_assignment PIN_43 -to SDRAM_CLK
+set_location_assignment PIN_46 -to UART_TX
+set_location_assignment PIN_31 -to UART_RX
 
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_DQ[0]
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_DQ[1]

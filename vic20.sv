@@ -110,6 +110,12 @@ module vic20_mist
 `ifdef USE_AUDIO_IN
 	input         AUDIO_IN,
 `endif
+`ifdef USE_EXPANSION
+	input         UART_CTS,
+	output        UART_RTS,
+	inout         EXP7,
+	inout         MOTOR_CTRL,
+`endif
 	input         UART_RX,
 	output        UART_TX
 
@@ -168,7 +174,17 @@ assign SDRAM2_nWE = 1;
 `include "build_id.v"
 
 assign LED = ~ioctl_download & ~led_disk & cass_motor;
-assign UART_TX = ~cass_motor;
+
+wire uart_tx;
+
+`ifdef USE_EXPANSION
+assign MOTOR_CTRL = cass_motor ? 1'b0 : 1'bZ;
+assign UART_TX = uart_tx;
+assign UART_RTS = 0;
+assign EXP7 = 1'bZ;
+`else
+assign UART_TX = uart_en ? uart_tx : ~cass_motor;
+`endif
 
 localparam TAP_MEM_START = 22'h20000;
 
@@ -194,6 +210,9 @@ localparam CONF_STR =
     "P3OE,Composite blend,Off,On;",
     "P3OD,Tape sound,Off,On;",
     "P3O9,Audio Filter,On,Off;",
+`ifndef USE_EXPANSION
+    "OH,Userport,Tape,UART;",
+`endif
     `SEP
     "T0,Reset;",
     "T1,Reset with cart unload;",
@@ -395,6 +414,7 @@ wire        st_tape_sound          = status[13];
 wire        st_blend               = status[14];
 wire        st_megacart            = status[15];
 wire        st_writenv             = status[16];
+wire        st_uart_en             = status[17];
 
 wire [31:0] sd_lba;
 wire [1:0]  sd_rd;
@@ -578,6 +598,9 @@ vic20 #(.I_EXTERNAL_ROM(1'b1)) VIC20
     .o_ram123_sel(vic_ram123_sel),
 
     .o_p2_h(p2_h),
+
+	 .i_uart_rx(UART_RX),
+	 .o_uart_tx(uart_tx),
 
     // -- ROM setup bus
     .CONF_WR(ioctl_internal_memory_wr & ioctl_ram_wr),
