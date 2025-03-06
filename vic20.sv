@@ -110,7 +110,7 @@ module vic20_mist
 `ifdef USE_AUDIO_IN
 	input         AUDIO_IN,
 `endif
-`ifdef USE_EXPANSION
+`ifdef SIDI128_EXPANSION
 	input         UART_CTS,
 	output        UART_RTS,
 	inout         EXP7,
@@ -177,7 +177,7 @@ assign LED = ~ioctl_download & ~led_disk & cass_motor;
 
 wire uart_tx;
 
-`ifdef USE_EXPANSION
+`ifdef SIDI128_EXPANSION
 assign MOTOR_CTRL = cass_motor ? 1'b0 : 1'bZ;
 assign UART_TX = uart_tx;
 assign UART_RTS = 0;
@@ -210,7 +210,7 @@ localparam CONF_STR =
     "P3OE,Composite blend,Off,On;",
     "P3OD,Tape sound,Off,On;",
     "P3O9,Audio Filter,On,Off;",
-`ifndef USE_EXPANSION
+`ifndef SIDI128_EXPANSION
     "OH,Userport,Tape,UART;",
 `endif
     `SEP
