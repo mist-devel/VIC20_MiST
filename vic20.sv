@@ -183,7 +183,7 @@ assign UART_TX = uart_tx;
 assign UART_RTS = 0;
 assign EXP7 = 1'bZ;
 `else
-assign UART_TX = uart_en ? uart_tx : ~cass_motor;
+assign UART_TX = st_uart_en ? uart_tx : ~cass_motor;
 `endif
 
 localparam TAP_MEM_START = 22'h20000;
