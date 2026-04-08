@@ -77,8 +77,6 @@ set_location_assignment PIN_136 -to VGA_VS
 set_location_assignment PIN_119 -to VGA_HS
 set_location_assignment PIN_65 -to AUDIO_L
 set_location_assignment PIN_80 -to AUDIO_R
-set_location_assignment PIN_46 -to UART_TX
-set_location_assignment PIN_31 -to UART_RX
 set_location_assignment PIN_105 -to SPI_DO
 set_location_assignment PIN_88 -to SPI_DI
 set_location_assignment PIN_126 -to SPI_SCK
@@ -293,6 +291,7 @@ set_location_assignment PLL_1 -to pll_vic20|altpll_component|auto_generated|pll1
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to UART_RX
 set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to UART_TX
 set_global_assignment -name SMART_RECOMPILE ON
+set_global_assignment -name SDC_FILE vic20.sdc
 set_global_assignment -name QIP_FILE T65/T65.qip
 set_global_assignment -name QIP_FILE "mist-modules/mist.qip"
 set_global_assignment -name SYSTEMVERILOG_FILE vic20.sv
