@@ -191,6 +191,7 @@ localparam TAP_MEM_START = 22'h20000;
 localparam CONF_STR =
 {
     "VIC20;PRGCRTTAP;",
+    "F3pIDX,IDX,Load;",
     "S0U,D64,Mount Disk;",
     "TC,Play/Stop TAP;",
     `SEP
@@ -201,7 +202,7 @@ localparam CONF_STR =
     "P1O45,8K+ RAM Cartridge,Off,8K,16K,24K;",
     "P2,Megacart;",
     "P2OF,Megacart,Off,On (overrides RAM);",
-    "P2F,ROM,Load Megacart ROM;",
+    "P2F2,ROM,Load Megacart ROM;",
     "P2S1U,NV ,Mount NVRAM;",
     "P2TG,Write NVRAM;",
     "P3,Video / Audio;",
@@ -740,7 +741,7 @@ wire        ioctl_download;
 wire  [7:0] ioctl_index;
 wire        rom_download = ioctl_download && !ioctl_index;
 wire        prg_download = ioctl_download && (ioctl_index == 8'h01 || ioctl_index == 8'h41);
-wire        tap_download = ioctl_download && ioctl_index == 8'h81;
+wire        tap_download = ioctl_download && (ioctl_index == 8'h81 || ioctl_index == 8'h03);
 wire        megacart_download = ioctl_download && (ioctl_index==8'h02);
 reg   [4:0] ioctl_reg_inject_state = 0;
 wire [22:0] ioctl_target_addr;
